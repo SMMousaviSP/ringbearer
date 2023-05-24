@@ -16,6 +16,15 @@ public class DataItem implements Cloneable{
         return super.clone();
     }
 
+    @Override
+    public String toString() {
+        return "DataItem{" +
+                "key=" + key +
+                ", value='" + value + '\'' +
+                ", version=" + version +
+                '}';
+    }
+
     public int getKey() {
         return key;
     }
