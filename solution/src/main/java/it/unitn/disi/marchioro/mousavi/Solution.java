@@ -2,7 +2,10 @@ package it.unitn.disi.marchioro.mousavi;
 import it.unitn.disi.marchioro.mousavi.Node.*;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class Solution {
@@ -29,12 +32,17 @@ public class Solution {
             //System.out.println("");
             temp = temp.next;
         }  while (temp != actorList.head);
+        try {
+
+            System.in.read();
+        }
+        catch (IOException ioe) {}
+        HashMap<Integer, CircularLinkedList.ListNode> handlers=actorList.getHandlers(31,N);
+        for(CircularLinkedList.ListNode l:handlers.values()){
+            System.out.println(l.getKey());
+        }
         try{
-            actorList.get(0).getActorRef().tell(new DataUpdateMessage(1,"ciao"),ActorRef.noSender());
-            actorList.get(0).getActorRef().tell(new DataUpdateMessage(2,"ciao2"),ActorRef.noSender());
-            actorList.get(0).getActorRef().tell(new DataUpdateMessage(1,"ciao1"),ActorRef.noSender());
-            actorList.get(1).getActorRef().tell(new DataUpdateMessage(1,"ciao3"),ActorRef.noSender());
-            actorList.get(4).getActorRef().tell(new DataUpdateMessage(1,"ciao4"),ActorRef.noSender());
+            actorList.get(0).getActorRef().tell(new DataUpdateMessage(31,"ciao"),ActorRef.noSender());
            // actorList.get(5).getActorRef().tell(new DataUpdateMessage(1,"ciao5"),ActorRef.noSender()); // this should raise an exception when there are only 5 actors
         }catch (Exception e){
             e.printStackTrace();

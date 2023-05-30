@@ -51,6 +51,8 @@ public class Node extends AbstractActor {
         return receiveBuilder()
                 .match(GroupUpdateMessage.class, this::onGroupUpdateMessage)
                 .match(DataUpdateMessage.class, this::onDataUpdateMessage)
+                .match(VoteResponse.class,this::onVoteResponse)
+                .match(Commitmsg.class,this::onCommitmsg)
                 .build();
     }
     public Receive crashed(){
@@ -64,25 +66,55 @@ public class Node extends AbstractActor {
         this.group= msg.group;
         group.printList();
     }
-    private void propagateUpdate(DataUpdateMessage msg){
-        int c=0;
+    private int locked=0;
+    private int handlingkey=-1;
+    private HashMap<Integer, CircularLinkedList.ListNode> handlers=null;
+    private void onVoteResponse(VoteResponse voteResponse){
+        if(handlingkey!=-1 && voteResponse.success){
+            locked++;
+        }else{
+            locked=0;
+        }
+        if(locked>=Solution.W){
+            System.out.println(getId()+" received locks from "+ locked+ " nodes, proceeding with commit");
+            for(CircularLinkedList.ListNode ln : handlers.values()){
+                ln.getActorRef().tell(new Commitmsg(voteResponse.msg),getSelf());
+            }
+            locked=0;
+        }
+    }
+    private void onCommitmsg(Commitmsg commitmsg){
+        if(storage.containsKey(commitmsg.msg.key)) {
+            storage.get(commitmsg.msg.key).setValue(commitmsg.msg.value);
+        }
+        else{
+            storage.put(commitmsg.msg.key,new DataItem(commitmsg.msg.key,commitmsg.msg.value, 0));
+        }
+        System.out.println(getId()+" committed "+commitmsg.msg.value+ " on data "+commitmsg.msg.key);
     }
     private void onDataUpdateMessage(DataUpdateMessage msg) {
         //TODO: modify method
         if(getSender().path().name().startsWith("node")){//this means the event has been triggered by another Server
             //if request arrives from another server send back to it the information regarding the data item
+            if(storage.containsKey(msg.key)){
+                if(!storage.get(msg.key).isLocked()){
+                    storage.get(msg.key).Lock(1);//change it with UUID;
+                    getSender().tell(new VoteResponse(true,msg),getSelf());
+                }else{
+                    getSender().tell(new VoteResponse(false,msg),getSelf());
+                }
+            }
+            else{
+                getSender().tell(new VoteResponse(true,msg),getSelf());
+            }
         }else {//this means the event has been triggered by a request from a Client
             //if received from a client, ask other servers, collect data and then send back to client (check for timeout)
-            if (storage.containsKey(msg.key)) {
-                DataItem storedItem = storage.get(msg.key);
-                storedItem.setVersion(storedItem.getVersion() + 1);
-                storedItem.setValue(msg.value);
-            } else {
-                storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
+            handlers=group.getHandlers(msg.key,Solution.N);
+            handlingkey=msg.key;
+            for(CircularLinkedList.ListNode ln : handlers.values()){
+                ln.getActorRef().tell(msg,getSelf());
             }
-            for (DataItem d : storage.values()) {
-                System.out.println(this.id + ": " + d.toString());
-            }
+
         }
     }
     //Message used to communicate group updates: Nodes joining/leaving, also used to define initial system configuration
@@ -99,6 +131,16 @@ public class Node extends AbstractActor {
             this.key = key;
             this.value=value;
         }
+    }
+    public static class VoteResponse implements Serializable {
+        public final boolean success;
+        public final DataUpdateMessage msg;
+        public VoteResponse(boolean success,DataUpdateMessage msg) { this.success = success; this.msg=msg;}
+    }
+
+    public static class Commitmsg implements Serializable {
+        public final DataUpdateMessage msg;
+        public Commitmsg(DataUpdateMessage msg) {  this.msg=msg;}
     }
 
 

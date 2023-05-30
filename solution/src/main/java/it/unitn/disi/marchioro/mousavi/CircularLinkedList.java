@@ -2,6 +2,9 @@ package it.unitn.disi.marchioro.mousavi;
 
 import akka.actor.ActorRef;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+
 public class CircularLinkedList {
     public ListNode head;
     public void addNode(int key, ActorRef actorRef){
@@ -57,6 +60,24 @@ public class CircularLinkedList {
             }  while (temp != head && counter<=i);
         }
         throw new Exception("Index out of bounds");
+    }
+    public HashMap<Integer,ListNode> getHandlers(int key, int n){
+        HashMap<Integer,ListNode> handlers= new HashMap<>();
+        if (head != null)
+        {
+            ListNode temp = head;
+            while(temp.getKey()<key ){
+                temp=temp.next;
+                if(temp==head){
+                    return handlers;
+                }
+            }
+            for(int i=0;i<n;i++){
+                handlers.put(temp.getKey(), temp);
+                temp=temp.next;
+            }
+        }
+        return handlers;
     }
     public class ListNode{
         private int key;
