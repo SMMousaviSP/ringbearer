@@ -70,9 +70,9 @@ public class Node extends AbstractActor {
     private void onDataUpdateMessage(DataUpdateMessage msg) {
         //TODO: modify method
         if(getSender().path().name().startsWith("node")){//this means the event has been triggered by another Server
-
+            //if request arrives from another server send back to it the information regarding the data item
         }else {//this means the event has been triggered by a request from a Client
-
+            //if received from a client, ask other servers, collect data and then send back to client (check for timeout)
             if (storage.containsKey(msg.key)) {
                 DataItem storedItem = storage.get(msg.key);
                 storedItem.setVersion(storedItem.getVersion() + 1);

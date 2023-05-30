@@ -17,7 +17,7 @@ public class Solution {
 
         //create M nodes
         for (int i = 0; i < M; i++) {
-            actorList.addNode(100-(id*10),system.actorOf(Node.props(id++, 100-(id*10)),"node"+i));
+            actorList.addNode(id*10,system.actorOf(Node.props(id++, id*10),"node"+i));
         }
         actorList.printList();
         //Communicate initial configuration to every Node
@@ -29,10 +29,17 @@ public class Solution {
             //System.out.println("");
             temp = temp.next;
         }  while (temp != actorList.head);
-        actorList.head.getActorRef().tell(new DataUpdateMessage(1,"ciao"),ActorRef.noSender());
-        actorList.head.getActorRef().tell(new DataUpdateMessage(2,"ciao2"),ActorRef.noSender());
-        actorList.head.getActorRef().tell(new DataUpdateMessage(1,"ciao1"),ActorRef.noSender());
-        actorList.head.next.getActorRef().tell(new DataUpdateMessage(1,"ciao3"),ActorRef.noSender());
+        try{
+            actorList.get(0).getActorRef().tell(new DataUpdateMessage(1,"ciao"),ActorRef.noSender());
+            actorList.get(0).getActorRef().tell(new DataUpdateMessage(2,"ciao2"),ActorRef.noSender());
+            actorList.get(0).getActorRef().tell(new DataUpdateMessage(1,"ciao1"),ActorRef.noSender());
+            actorList.get(1).getActorRef().tell(new DataUpdateMessage(1,"ciao3"),ActorRef.noSender());
+            actorList.get(4).getActorRef().tell(new DataUpdateMessage(1,"ciao4"),ActorRef.noSender());
+           // actorList.get(5).getActorRef().tell(new DataUpdateMessage(1,"ciao5"),ActorRef.noSender()); // this should raise an exception when there are only 5 actors
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+
 
         // system shutdown
         system.terminate();
