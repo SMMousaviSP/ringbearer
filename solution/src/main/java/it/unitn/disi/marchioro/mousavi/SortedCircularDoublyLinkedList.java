@@ -126,6 +126,10 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
         return null;
     }
 
+    public Element<T> getFirst() {
+        return head;
+    }
+
     public List<Integer> getSortedKeys() {
         List<Integer> sortedKeys = new ArrayList<>();
         if (head == null) return sortedKeys;
