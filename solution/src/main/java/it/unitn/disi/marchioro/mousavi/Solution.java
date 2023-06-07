@@ -1,47 +1,59 @@
 package it.unitn.disi.marchioro.mousavi;
-import it.unitn.disi.marchioro.mousavi.Node.*;
+
+import it.unitn.disi.marchioro.mousavi.Node.JoinNodeCoordinator;
+import it.unitn.disi.marchioro.mousavi.Node.LeaveNodeCoordinator;
+// import it.unitn.disi.marchioro.mousavi.Node.*;
+// import it.unitn.disi.marchioro.mousavi.SortedCircularDoublyLinkedList.*;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 import java.util.ArrayList;
-import java.util.List;
 
 public class Solution {
-    public final static int M=5, N=3,R=2,W=2,T=10;
+    public final static int M = 5, N = 3, R = 2, W = 2, T = 10;
+
     public static void main(String[] args) {
         // Create the actor system
         final ActorSystem system = ActorSystem.create("akkasystem");
 
-        CircularLinkedList actorList= new CircularLinkedList();
+        SortedCircularDoublyLinkedList<ActorRef> actorList = new SortedCircularDoublyLinkedList<ActorRef>();
 
-        int id = 0;
+        // create M nodes
+        int id, key;
+        for (int i = 1; i <= M; i++) {
+            try {
+                Thread.sleep(1000); // wait for 1 second
+            } catch (InterruptedException e) {
+                // handle the exception
+            }
+            
+            id = i;
+            key = i * 10;
+            ActorRef actorRef = system.actorOf(Node.props(id, key), "node" + id);
+            actorList.add(key, actorRef);
+            
+            // If this is the first node, there is no other node to tell it to join
+            if (i == 1) {
+                continue;
+            }
 
-        //create M nodes
-        for (int i = 0; i < M; i++) {
-            actorList.addNode(id*10,system.actorOf(Node.props(id++, id*10),"node"+i));
-        }
-        actorList.printList();
-        //Communicate initial configuration to every Node
-        GroupUpdateMessage initialGroup= new GroupUpdateMessage(actorList);
-        CircularLinkedList.ListNode temp = actorList.head;
-        do
-        {
-            temp.getActorRef().tell(initialGroup,ActorRef.noSender());
-            //System.out.println("");
-            temp = temp.next;
-        }  while (temp != actorList.head);
-        try{
-            actorList.get(0).getActorRef().tell(new DataUpdateMessage(1,"ciao"),ActorRef.noSender());
-            actorList.get(0).getActorRef().tell(new DataUpdateMessage(2,"ciao2"),ActorRef.noSender());
-            actorList.get(0).getActorRef().tell(new DataUpdateMessage(1,"ciao1"),ActorRef.noSender());
-            actorList.get(1).getActorRef().tell(new DataUpdateMessage(1,"ciao3"),ActorRef.noSender());
-            actorList.get(4).getActorRef().tell(new DataUpdateMessage(1,"ciao4"),ActorRef.noSender());
-           // actorList.get(5).getActorRef().tell(new DataUpdateMessage(1,"ciao5"),ActorRef.noSender()); // this should raise an exception when there are only 5 actors
-        }catch (Exception e){
-            e.printStackTrace();
+            JoinNodeCoordinator joinNodeCoordinator = new JoinNodeCoordinator(key, actorRef);
+            ActorRef headRef = actorList.getFirst().value;
+            headRef.tell(joinNodeCoordinator, ActorRef.noSender());
         }
 
+        try {
+            Thread.sleep(1000); // wait for 1 second
+        } catch (InterruptedException e) {
+            // handle the exception
+        }
 
-        // system shutdown
-        system.terminate();
+        LeaveNodeCoordinator leaveNodeCoordinator = new LeaveNodeCoordinator(40);
+        ActorRef headRef = actorList.getFirst().value;
+        headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
+        
+
+
+
     }
+
 }

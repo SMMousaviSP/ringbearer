@@ -44,6 +44,8 @@ public class Node extends AbstractActor {
         this.id = id;
         this.key = key;
         this.storage = (HashMap<Integer, DataItem>) storage.clone();
+        this.group = new SortedCircularDoublyLinkedList<ActorRef>();
+        this.group.add(key, getSelf());
     }
 
     static public Props props(int id, int value) {
@@ -68,30 +70,38 @@ public class Node extends AbstractActor {
         }
     }
 
-    static public class JoinNode {
-        public final int nodeKey;
-        public final ActorRef nodeRef;
+    // static public class JoinNode {
+    //     public final int nodeKey;
+    //     public final ActorRef nodeRef;
 
-        public JoinNode(int nodeKey, ActorRef nodeRef) {
-            this.nodeKey = nodeKey;
-            this.nodeRef = nodeRef;
+    //     public JoinNode(int nodeKey, ActorRef nodeRef) {
+    //         this.nodeKey = nodeKey;
+    //         this.nodeRef = nodeRef;
+    //     }
+    // }
+
+    static public class LeaveNode {
+        public final SortedCircularDoublyLinkedList<ActorRef> group;
+        
+        public LeaveNode(SortedCircularDoublyLinkedList<ActorRef> group) {
+            this.group = group;
         }
     }
 
-    static public class LeaveNode {
-        public final int nodeKey;
-
-        public LeaveNode(int nodeKey) {
-            this.nodeKey = nodeKey;
+    static public class JoinNode {
+        public final SortedCircularDoublyLinkedList<ActorRef> group;
+        
+        public JoinNode(SortedCircularDoublyLinkedList<ActorRef> group) {
+            this.group = group;
         }
     }
 
     @Override
     public Receive createReceive() {
         return receiveBuilder()
+                .match(JoinNode.class, this::onJoinNode)
                 .match(JoinNodeCoordinator.class, this::onJoinNodeCoordinator)
                 .match(LeaveNodeCoordinator.class, this::onLeaveNodeCoordinator)
-                .match(JoinNode.class, this::onJoinNode)
                 .match(LeaveNode.class, this::onLeaveNode)
                 .match(DataUpdateMessage.class, this::onDataUpdateMessage)
                 .build();
@@ -106,50 +116,77 @@ public class Node extends AbstractActor {
                 .build();
     }
 
+    private void onJoinNode(JoinNode joinNode) {
+        this.group = joinNode.group;
+        System.out.println("My key: " + this.key);
+        System.out.println("New node joined the group");
+        System.out.println(this.group);
+        System.out.println();
+    }
+
     private void onJoinNodeCoordinator(JoinNodeCoordinator joinNodeCoordinator) {
         int nodeKey = joinNodeCoordinator.nodeKey;
+        // Throw exception if nodeKey is the same as this.key
+        if (nodeKey == this.key)
+            throw new IllegalArgumentException("The coordinator cannot join itself");
+        // Throw exception if nodeKey is already in the group
+        if (this.group.getElement(nodeKey) != null)
+            throw new IllegalArgumentException("The coordinator cannot join a node that is already in the group");
         ActorRef nodeRef = joinNodeCoordinator.nodeRef;
-        JoinNode joinNode = new JoinNode(nodeKey, nodeRef);
+        // JoinNode joinNode = new JoinNode(nodeKey, nodeRef);
+        this.group.add(nodeKey, nodeRef);
+        JoinNode joinNode = new JoinNode(this.group);
         for (Element<ActorRef> otherNode : this.group) {
             if (otherNode.key == this.key)
                 continue;
             otherNode.value.tell(joinNode, getSelf());
         }
-        this.group.add(nodeKey, nodeRef);
-        System.out.println("Node " + this.id + " joined group");
+        // for (Element<ActorRef> otherNode = this.group.getElement(this.key).next; otherNode.key != this.key; otherNode = otherNode.next) {
+        //     otherNode.value.tell(joinNode, getSelf());
+        // }
+
+        // nodeRef.tell(newNode, getSelf());
+        System.out.println("Coordinator, My key: " + this.key);
+        System.out.println("Node " + nodeKey + " joined group");
         System.out.println(this.group);
+        System.out.println();
     }
 
     private void onLeaveNodeCoordinator(LeaveNodeCoordinator leaveNodeCoordinator) {
         int nodeKey = leaveNodeCoordinator.nodeKey;
-        LeaveNode leaveNode = new LeaveNode(nodeKey);
+        // Throw exception if nodeKey is the same as this.key
+        if (nodeKey == this.key)
+            throw new IllegalArgumentException("The coordinator cannot leave itself");
+        // Throw exception if nodeKey is not in the group
+        if (this.group.getElement(nodeKey) == null)
+            throw new IllegalArgumentException("The coordinator cannot leave a node that is not in the group");
+        this.group.remove(nodeKey);
+        LeaveNode leaveNode = new LeaveNode(this.group);
         for (Element<ActorRef> otherNode : this.group) {
             if (otherNode.key == this.key)
                 continue;
             otherNode.value.tell(leaveNode, getSelf());
         }
-        this.group.remove(nodeKey);
-        System.out.println("Coordinator, My key" + this.key);
-        System.out.println("Node " + this.id + " left group");
+        System.out.println("Coordinator, My key: " + this.key);
+        System.out.println("Node " + nodeKey + " left group");
         System.out.println(this.group);
         System.out.println();
     }
 
-    private void onJoinNode(JoinNode joinNode) {
-        int nodeKey = joinNode.nodeKey;
-        ActorRef nodeRef = joinNode.nodeRef;
-        this.group.add(nodeKey, nodeRef);
-        System.out.println("My key: " + this.key);
-        System.out.println("Node " + this.id + " joined group");
-        System.out.println(this.group);
-        System.out.println();
-    }
+    // private void onJoinNode(JoinNode joinNode) {
+    //     int nodeKey = joinNode.nodeKey;
+    //     ActorRef nodeRef = joinNode.nodeRef;
+    //     this.group.add(nodeKey, nodeRef);
+    //     System.out.println("My key: " + this.key);
+    //     System.out.println("Node " + nodeKey + " joined group");
+    //     System.out.println(this.group);
+    //     System.out.println();
+    // }
 
     private void onLeaveNode(LeaveNode leaveNode) {
-        int nodeKey = leaveNode.nodeKey;
-        this.group.remove(nodeKey);
+        this.group = leaveNode.group;
         System.out.println("My key: " + this.key);
-        System.out.println("Node " + this.id + " left group");
+        System.out.println("One node left the group");
         System.out.println(this.group);
         System.out.println();
     }
