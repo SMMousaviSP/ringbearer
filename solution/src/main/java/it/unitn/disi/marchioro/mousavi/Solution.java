@@ -9,9 +9,15 @@ import akka.actor.ActorSystem;
 import java.util.ArrayList;
 
 public class Solution {
-    public final static int M = 5, N = 3, R = 2, W = 2, T = 10;
 
     public static void main(String[] args) {
+
+        final int M = Constants.M;
+        final int N = Constants.N;
+        final int R = Constants.R;
+        final int W = Constants.W;
+
+
         // Create the actor system
         final ActorSystem system = ActorSystem.create("akkasystem");
 
