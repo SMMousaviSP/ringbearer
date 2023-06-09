@@ -6,6 +6,8 @@ import it.unitn.disi.marchioro.mousavi.Node.LeaveNodeCoordinator;
 // import it.unitn.disi.marchioro.mousavi.SortedCircularDoublyLinkedList.*;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+
+import java.io.IOException;
 import java.util.ArrayList;
 
 public class Solution {
@@ -57,10 +59,18 @@ public class Solution {
         ActorRef headRef = actorList.getFirst().value;
         //headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
         
-        headRef.tell(new Node.ClientRequest(new Request(35,"ciao",Type.READ)),ActorRef.noSender());
+        headRef.tell(new Node.ClientRequest(new Request(35,"test",Type.UPDATE)),ActorRef.noSender());
+
+
 
         // system shutdown
+        try {
+            System.out.println(">>> Press ENTER to exit <<<");
+            System.in.read();
+        }
+        catch (IOException ignored) {}
         system.terminate();
+
     }
 
 }

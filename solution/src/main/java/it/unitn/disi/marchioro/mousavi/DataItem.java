@@ -4,12 +4,17 @@ public class DataItem implements Cloneable{
     private int key;
     private String value;
     private int version;
-
+    private boolean lock;
 
     public DataItem(int key, String value, int version) {
+        this(key,value,version,false);
+    }
+
+    public DataItem(int key, String value, int version, boolean lock) {
         this.key = key;
         this.value = value;
         this.version = version;
+        this.lock=lock;
     }
 
     @Override
@@ -24,6 +29,14 @@ public class DataItem implements Cloneable{
                 ", value='" + value + '\'' +
                 ", version=" + version +
                 '}';
+    }
+
+    public boolean isLock() {
+        return lock;
+    }
+
+    public void setLock(boolean lock) {
+        this.lock = lock;
     }
 
     public int getKey() {

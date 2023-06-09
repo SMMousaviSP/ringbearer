@@ -97,6 +97,38 @@ public class Node extends AbstractActor {
             this.request = request;
         }
     }
+
+    static public class LockRequest implements Serializable{
+        public final int key;
+        public final Type type;
+
+        public LockRequest(int key,Type type) {
+            this.key = key;
+            this.type=type;
+        }
+    }
+
+    static public class LockResponse implements Serializable{
+        public final DataItem dataItem;
+        public final boolean requestState; //true means success
+        public LockResponse(DataItem dataItem,boolean requestState) {
+            this.dataItem = dataItem;
+            this.requestState=requestState;
+        }
+    }
+    static public class CommitRequest implements Serializable{
+        public final DataItem dataItem;
+        public CommitRequest(DataItem dataItem) {
+            this.dataItem = dataItem;
+        }
+    }
+
+    static public class UnlockRequest implements Serializable{
+        public final DataItem dataItem;
+        public UnlockRequest(DataItem dataItem) {
+            this.dataItem = dataItem;
+        }
+    }
     @Override
     public Receive createReceive() {
         return receiveBuilder()
@@ -105,6 +137,8 @@ public class Node extends AbstractActor {
                 .match(LeaveNodeCoordinator.class, this::onLeaveNodeCoordinator)
                 .match(LeaveNode.class, this::onLeaveNode)
                 .match(ClientRequest.class,this::onClientRequest)
+                .match(LockRequest.class,this::onLockRequest)
+                .match(LockResponse.class,this::onLockResponse)
                 .match(DataUpdateMessage.class, this::onDataUpdateMessage)
                 .build();
     }
@@ -198,20 +232,64 @@ public class Node extends AbstractActor {
         if(requests.containsKey(clientRequest.request.getKey())){
             throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
         }
-
+        requests.put(clientRequest.request.getKey(),clientRequest.request);
         if(clientRequest.request.getType()==Type.READ){
-            HashMap<Integer, Element<ActorRef>> handlers=this.group.getHandlers(clientRequest.request.getKey(),Solution.N);
+            HashMap<Integer, Element<ActorRef>> handlers=this.group.getHandlers(clientRequest.request.getKey(),Constants.N);
 
             System.out.println("client request to server "+getId() +" for data item "+clientRequest.request.getKey()+", asking ");
-            for (Element<ActorRef> el :
-                    handlers.values()) {
+            requests.get(clientRequest.request.getKey()).setState(State.PENDING);
+            for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key+" ");
+                el.value.tell(new LockRequest(clientRequest.request.getKey(),clientRequest.request.getType()),getSelf());
             }
             System.out.println("");
         }else if(clientRequest.request.getType()==Type.UPDATE){
+            HashMap<Integer, Element<ActorRef>> handlers=this.group.getHandlers(clientRequest.request.getKey(),Constants.N);
 
+            System.out.println("client request to server "+getId() +" for data item "+clientRequest.request.getKey()+", asking ");
+            requests.get(clientRequest.request.getKey()).setState(State.PENDING);
+            for (Element<ActorRef> el : handlers.values()) {
+                System.out.print(el.key+" ");
+                el.value.tell(new LockRequest(clientRequest.request.getKey(),clientRequest.request.getType()),getSelf());
+            }
+            System.out.println("");
         }else {
             throw new IllegalArgumentException("Request type not supported");
+        }
+    }
+    private void onLockRequest(LockRequest lockRequest){
+        if(storage.containsKey(lockRequest.key)){
+            if(!storage.get(lockRequest.key).isLock()){
+                storage.get(lockRequest.key).setLock(true);
+                getSender().tell(new LockResponse(storage.get(lockRequest.key),true),getSelf());
+            }else{
+                getSender().tell(new LockResponse(storage.get(lockRequest.key),false),getSelf());
+            }
+        }else if(lockRequest.type==Type.READ){
+            //this part of code is executed if for some reason we are trying
+            //to read a data from a server that doesn't hold it, probably
+            //we can simply say we don't provide the lock
+            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "",0,false),false),getSelf());
+        }else{
+            //this is executed when we are trying to add a new data item to the storage of the server
+            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "",0,false),true),getSelf());
+        }
+    }
+
+    public void onLockResponse(LockResponse lockResponse){
+        Request r=requests.get(lockResponse.dataItem.getKey());
+        r.receivedResponse();
+        System.out.println("received response ");
+        if(lockResponse.requestState){
+            r.acquiredLock();
+        }
+        if(r.canCommit() && r.getState()==State.PENDING){
+            r.setState(State.COMMITTING);
+            System.out.println("received enough locks to commit "+r.getKey());
+            //start committing phase
+        }
+        if(!r.mayBePerformed()){
+            //abort
         }
     }
     private void propagateUpdate(DataUpdateMessage msg) {
