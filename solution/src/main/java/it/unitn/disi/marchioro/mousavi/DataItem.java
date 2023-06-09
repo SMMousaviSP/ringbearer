@@ -14,7 +14,7 @@ public class DataItem implements Cloneable{
         this.key = key;
         this.value = value;
         this.version = version;
-        this.lock=lock;
+        this.lock = lock;
     }
 
     @Override

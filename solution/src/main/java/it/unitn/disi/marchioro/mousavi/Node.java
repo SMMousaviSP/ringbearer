@@ -11,7 +11,8 @@ public class Node extends AbstractActor {
     private int id, key;
     private HashMap<Integer, DataItem> storage;
     private SortedCircularDoublyLinkedList<ActorRef> group; // an array of group members
-    private HashMap<Integer,Request> requests;
+    private HashMap<Integer, Request> requests;
+
     public int getId() {
         return id;
     }
@@ -39,7 +40,7 @@ public class Node extends AbstractActor {
         this.storage = (HashMap<Integer, DataItem>) storage.clone();
         this.group = new SortedCircularDoublyLinkedList<ActorRef>();
         this.group.add(key, getSelf());
-        this.requests=new HashMap<>();
+        this.requests = new HashMap<>();
     }
 
     static public Props props(int id, int value) {
@@ -65,18 +66,18 @@ public class Node extends AbstractActor {
     }
 
     // static public class JoinNode {
-    //     public final int nodeKey;
-    //     public final ActorRef nodeRef;
+    // public final int nodeKey;
+    // public final ActorRef nodeRef;
 
-    //     public JoinNode(int nodeKey, ActorRef nodeRef) {
-    //         this.nodeKey = nodeKey;
-    //         this.nodeRef = nodeRef;
-    //     }
+    // public JoinNode(int nodeKey, ActorRef nodeRef) {
+    // this.nodeKey = nodeKey;
+    // this.nodeRef = nodeRef;
+    // }
     // }
 
     static public class LeaveNode {
         public final SortedCircularDoublyLinkedList<ActorRef> group;
-        
+
         public LeaveNode(SortedCircularDoublyLinkedList<ActorRef> group) {
             this.group = group;
         }
@@ -84,13 +85,13 @@ public class Node extends AbstractActor {
 
     static public class JoinNode {
         public final SortedCircularDoublyLinkedList<ActorRef> group;
-        
+
         public JoinNode(SortedCircularDoublyLinkedList<ActorRef> group) {
             this.group = group;
         }
     }
 
-    static public class ClientRequest implements Serializable{
+    static public class ClientRequest implements Serializable {
         public final Request request;
 
         public ClientRequest(Request request) {
@@ -98,37 +99,42 @@ public class Node extends AbstractActor {
         }
     }
 
-    static public class LockRequest implements Serializable{
+    static public class LockRequest implements Serializable {
         public final int key;
         public final Type type;
 
-        public LockRequest(int key,Type type) {
+        public LockRequest(int key, Type type) {
             this.key = key;
-            this.type=type;
+            this.type = type;
         }
     }
 
-    static public class LockResponse implements Serializable{
+    static public class LockResponse implements Serializable {
         public final DataItem dataItem;
-        public final boolean requestState; //true means success
-        public LockResponse(DataItem dataItem,boolean requestState) {
+        public final boolean requestState; // true means success
+
+        public LockResponse(DataItem dataItem, boolean requestState) {
             this.dataItem = dataItem;
-            this.requestState=requestState;
+            this.requestState = requestState;
         }
     }
-    static public class CommitRequest implements Serializable{
+
+    static public class CommitRequest implements Serializable {
         public final DataItem dataItem;
+
         public CommitRequest(DataItem dataItem) {
             this.dataItem = dataItem;
         }
     }
 
-    static public class UnlockRequest implements Serializable{
+    static public class UnlockRequest implements Serializable {
         public final DataItem dataItem;
+
         public UnlockRequest(DataItem dataItem) {
             this.dataItem = dataItem;
         }
     }
+
     @Override
     public Receive createReceive() {
         return receiveBuilder()
@@ -136,9 +142,9 @@ public class Node extends AbstractActor {
                 .match(JoinNodeCoordinator.class, this::onJoinNodeCoordinator)
                 .match(LeaveNodeCoordinator.class, this::onLeaveNodeCoordinator)
                 .match(LeaveNode.class, this::onLeaveNode)
-                .match(ClientRequest.class,this::onClientRequest)
-                .match(LockRequest.class,this::onLockRequest)
-                .match(LockResponse.class,this::onLockResponse)
+                .match(ClientRequest.class, this::onClientRequest)
+                .match(LockRequest.class, this::onLockRequest)
+                .match(LockResponse.class, this::onLockResponse)
                 .match(DataUpdateMessage.class, this::onDataUpdateMessage)
                 .build();
     }
@@ -177,8 +183,9 @@ public class Node extends AbstractActor {
                 continue;
             otherNode.value.tell(joinNode, getSelf());
         }
-        // for (Element<ActorRef> otherNode = this.group.getElement(this.key).next; otherNode.key != this.key; otherNode = otherNode.next) {
-        //     otherNode.value.tell(joinNode, getSelf());
+        // for (Element<ActorRef> otherNode = this.group.getElement(this.key).next;
+        // otherNode.key != this.key; otherNode = otherNode.next) {
+        // otherNode.value.tell(joinNode, getSelf());
         // }
 
         // nodeRef.tell(newNode, getSelf());
@@ -210,13 +217,13 @@ public class Node extends AbstractActor {
     }
 
     // private void onJoinNode(JoinNode joinNode) {
-    //     int nodeKey = joinNode.nodeKey;
-    //     ActorRef nodeRef = joinNode.nodeRef;
-    //     this.group.add(nodeKey, nodeRef);
-    //     System.out.println("My key: " + this.key);
-    //     System.out.println("Node " + nodeKey + " joined group");
-    //     System.out.println(this.group);
-    //     System.out.println();
+    // int nodeKey = joinNode.nodeKey;
+    // ActorRef nodeRef = joinNode.nodeRef;
+    // this.group.add(nodeKey, nodeRef);
+    // System.out.println("My key: " + this.key);
+    // System.out.println("Node " + nodeKey + " joined group");
+    // System.out.println(this.group);
+    // System.out.println();
     // }
 
     private void onLeaveNode(LeaveNode leaveNode) {
@@ -227,71 +234,80 @@ public class Node extends AbstractActor {
         System.out.println();
     }
 
-    private void onClientRequest(ClientRequest clientRequest){
+    private void onClientRequest(ClientRequest clientRequest) {
 
-        if(requests.containsKey(clientRequest.request.getKey())){
+        if (requests.containsKey(clientRequest.request.getKey())) {
             throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
         }
-        requests.put(clientRequest.request.getKey(),clientRequest.request);
-        if(clientRequest.request.getType()==Type.READ){
-            HashMap<Integer, Element<ActorRef>> handlers=this.group.getHandlers(clientRequest.request.getKey(),Constants.N);
+        requests.put(clientRequest.request.getKey(), clientRequest.request);
+        if (clientRequest.request.getType() == Type.READ) {
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getKey(),
+                    Constants.N);
 
-            System.out.println("client request to server "+getId() +" for data item "+clientRequest.request.getKey()+", asking ");
+            System.out.println("client request to server " + getId() + " for data item "
+                    + clientRequest.request.getKey() + ", asking ");
             requests.get(clientRequest.request.getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
-                System.out.print(el.key+" ");
-                el.value.tell(new LockRequest(clientRequest.request.getKey(),clientRequest.request.getType()),getSelf());
+                System.out.print(el.key + " ");
+                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType()),
+                        getSelf());
             }
             System.out.println("");
-        }else if(clientRequest.request.getType()==Type.UPDATE){
-            HashMap<Integer, Element<ActorRef>> handlers=this.group.getHandlers(clientRequest.request.getKey(),Constants.N);
+        } else if (clientRequest.request.getType() == Type.UPDATE) {
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getKey(),
+                    Constants.N);
 
-            System.out.println("client request to server "+getId() +" for data item "+clientRequest.request.getKey()+", asking ");
+            System.out.println("client request to server " + getId() + " for data item "
+                    + clientRequest.request.getKey() + ", asking ");
             requests.get(clientRequest.request.getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
-                System.out.print(el.key+" ");
-                el.value.tell(new LockRequest(clientRequest.request.getKey(),clientRequest.request.getType()),getSelf());
+                System.out.print(el.key + " ");
+                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType()),
+                        getSelf());
             }
             System.out.println("");
-        }else {
+        } else {
             throw new IllegalArgumentException("Request type not supported");
         }
     }
-    private void onLockRequest(LockRequest lockRequest){
-        if(storage.containsKey(lockRequest.key)){
-            if(!storage.get(lockRequest.key).isLock()){
+
+    private void onLockRequest(LockRequest lockRequest) {
+        if (storage.containsKey(lockRequest.key)) {
+            if (!storage.get(lockRequest.key).isLock()) {
                 storage.get(lockRequest.key).setLock(true);
-                getSender().tell(new LockResponse(storage.get(lockRequest.key),true),getSelf());
-            }else{
-                getSender().tell(new LockResponse(storage.get(lockRequest.key),false),getSelf());
+                getSender().tell(new LockResponse(storage.get(lockRequest.key), true), getSelf());
+            } else {
+                getSender().tell(new LockResponse(storage.get(lockRequest.key), false), getSelf());
             }
-        }else if(lockRequest.type==Type.READ){
-            //this part of code is executed if for some reason we are trying
-            //to read a data from a server that doesn't hold it, probably
-            //we can simply say we don't provide the lock
-            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "",0,false),false),getSelf());
-        }else{
-            //this is executed when we are trying to add a new data item to the storage of the server
-            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "",0,false),true),getSelf());
+        } else if (lockRequest.type == Type.READ) {
+            // this part of code is executed if for some reason we are trying
+            // to read a data from a server that doesn't hold it, probably
+            // we can simply say we don't provide the lock
+            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, false), false), getSelf());
+        } else {
+            // this is executed when we are trying to add a new data item to the storage of
+            // the server
+            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, false), true), getSelf());
         }
     }
 
-    public void onLockResponse(LockResponse lockResponse){
-        Request r=requests.get(lockResponse.dataItem.getKey());
+    public void onLockResponse(LockResponse lockResponse) {
+        Request r = requests.get(lockResponse.dataItem.getKey());
         r.receivedResponse();
         System.out.println("received response ");
-        if(lockResponse.requestState){
+        if (lockResponse.requestState) {
             r.acquiredLock();
         }
-        if(r.canCommit() && r.getState()==State.PENDING){
+        if (r.canCommit() && r.getState() == State.PENDING) {
             r.setState(State.COMMITTING);
-            System.out.println("received enough locks to commit "+r.getKey());
-            //start committing phase
+            System.out.println("received enough locks to commit " + r.getKey());
+            // start committing phase
         }
-        if(!r.mayBePerformed()){
-            //abort
+        if (!r.mayBePerformed()) {
+            // abort
         }
     }
+
     private void propagateUpdate(DataUpdateMessage msg) {
         int c = 0;
     }
@@ -335,9 +351,5 @@ public class Node extends AbstractActor {
             this.value = value;
         }
     }
-
-
-
-
 
 }
