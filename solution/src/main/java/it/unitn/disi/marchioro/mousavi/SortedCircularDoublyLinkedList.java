@@ -1,10 +1,6 @@
 package it.unitn.disi.marchioro.mousavi;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 
 class Element<T> {
@@ -142,6 +138,26 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
         return sortedKeys;
     }
 
+    // given a dataitem key, return n handlers for that data item
+    // n can also be set at compile time (N parameter), it shouldn't change during execution
+    public HashMap<Integer,Element<T>> getHandlers(int key, int n){
+        HashMap<Integer,Element<T>> handlers= new HashMap<>();
+        if (head != null)
+        {
+            Element<T> temp = head;
+            while(temp.key<key ){
+                temp=temp.next;
+                if(temp==head){
+                    return handlers;
+                }
+            }
+            for(int i=0;i<n;i++){
+                handlers.put(temp.key, temp);
+                temp=temp.next;
+            }
+        }
+        return handlers;
+    }
     @Override
     public String toString() {
         if (head == null) {

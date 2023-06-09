@@ -49,11 +49,12 @@ public class Solution {
 
         LeaveNodeCoordinator leaveNodeCoordinator = new LeaveNodeCoordinator(40);
         ActorRef headRef = actorList.getFirst().value;
-        headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
+        //headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
         
+        headRef.tell(new Node.ClientRequest(new Request(35,"ciao",Type.READ)),ActorRef.noSender());
 
-
-
+        // system shutdown
+        system.terminate();
     }
 
 }

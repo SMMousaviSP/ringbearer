@@ -1,24 +1,17 @@
 package it.unitn.disi.marchioro.mousavi;
 
-import it.unitn.disi.marchioro.mousavi.SortedCircularDoublyLinkedList.*;
-
 import akka.actor.AbstractActor;
-import akka.actor.Actor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 
-import java.io.Console;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 
 public class Node extends AbstractActor {
     private int id, key;
     private HashMap<Integer, DataItem> storage;
     private SortedCircularDoublyLinkedList<ActorRef> group; // an array of group members
-
+    private HashMap<Integer,Request> requests;
     public int getId() {
         return id;
     }
@@ -46,6 +39,7 @@ public class Node extends AbstractActor {
         this.storage = (HashMap<Integer, DataItem>) storage.clone();
         this.group = new SortedCircularDoublyLinkedList<ActorRef>();
         this.group.add(key, getSelf());
+        this.requests=new HashMap<>();
     }
 
     static public Props props(int id, int value) {
@@ -96,6 +90,13 @@ public class Node extends AbstractActor {
         }
     }
 
+    static public class ClientRequest implements Serializable{
+        public final Request request;
+
+        public ClientRequest(Request request) {
+            this.request = request;
+        }
+    }
     @Override
     public Receive createReceive() {
         return receiveBuilder()
@@ -103,6 +104,7 @@ public class Node extends AbstractActor {
                 .match(JoinNodeCoordinator.class, this::onJoinNodeCoordinator)
                 .match(LeaveNodeCoordinator.class, this::onLeaveNodeCoordinator)
                 .match(LeaveNode.class, this::onLeaveNode)
+                .match(ClientRequest.class,this::onClientRequest)
                 .match(DataUpdateMessage.class, this::onDataUpdateMessage)
                 .build();
     }
@@ -191,6 +193,27 @@ public class Node extends AbstractActor {
         System.out.println();
     }
 
+    private void onClientRequest(ClientRequest clientRequest){
+
+        if(requests.containsKey(clientRequest.request.getKey())){
+            throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
+        }
+
+        if(clientRequest.request.getType()==Type.READ){
+            HashMap<Integer, Element<ActorRef>> handlers=this.group.getHandlers(clientRequest.request.getKey(),Solution.N);
+
+            System.out.println("client request to server "+getId() +" for data item "+clientRequest.request.getKey()+", asking ");
+            for (Element<ActorRef> el :
+                    handlers.values()) {
+                System.out.print(el.key+" ");
+            }
+            System.out.println("");
+        }else if(clientRequest.request.getType()==Type.UPDATE){
+
+        }else {
+            throw new IllegalArgumentException("Request type not supported");
+        }
+    }
     private void propagateUpdate(DataUpdateMessage msg) {
         int c = 0;
     }
@@ -234,5 +257,9 @@ public class Node extends AbstractActor {
             this.value = value;
         }
     }
+
+
+
+
 
 }
