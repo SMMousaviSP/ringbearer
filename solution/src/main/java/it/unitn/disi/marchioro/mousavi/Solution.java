@@ -2,6 +2,7 @@ package it.unitn.disi.marchioro.mousavi;
 
 import it.unitn.disi.marchioro.mousavi.Node.JoinNodeCoordinator;
 import it.unitn.disi.marchioro.mousavi.Node.LeaveNodeCoordinator;
+import it.unitn.disi.marchioro.mousavi.Node.ClientRequest;
 // import it.unitn.disi.marchioro.mousavi.Node.*;
 // import it.unitn.disi.marchioro.mousavi.SortedCircularDoublyLinkedList.*;
 import akka.actor.ActorRef;
@@ -29,7 +30,7 @@ public class Solution {
         int id, key;
         for (int i = 1; i <= M; i++) {
             try {
-                Thread.sleep(1000); // wait for 1 second
+                Thread.sleep(300); // wait for 1 second
             } catch (InterruptedException e) {
                 // handle the exception
             }
@@ -50,16 +51,27 @@ public class Solution {
         }
 
         try {
-            Thread.sleep(1000); // wait for 1 second
+            Thread.sleep(300); // wait for 1 second
         } catch (InterruptedException e) {
             // handle the exception
         }
 
-        LeaveNodeCoordinator leaveNodeCoordinator = new LeaveNodeCoordinator(40);
+        // LeaveNodeCoordinator leaveNodeCoordinator = new LeaveNodeCoordinator(40);
         ActorRef headRef = actorList.getFirst().value;
-        //headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
+        // //headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
         
-        headRef.tell(new Node.ClientRequest(new Request(35,"test",Type.UPDATE)),ActorRef.noSender());
+        ClientRequest cr = new ClientRequest(new Request(35,"test",Type.UPDATE));
+        ClientRequest cr2 = new ClientRequest(new Request(40,"test",Type.UPDATE));
+        ClientRequest cr3 = new ClientRequest(new Request(35,"test2",Type.UPDATE));
+        headRef.tell(cr ,ActorRef.noSender());
+        headRef.tell(cr2 ,ActorRef.noSender());
+        // sleep
+        try {
+            Thread.sleep(300); // wait for 1 second
+        } catch (InterruptedException e) {
+            // handle the exception
+        }
+        headRef.tell(cr3 ,ActorRef.noSender());
 
 
 

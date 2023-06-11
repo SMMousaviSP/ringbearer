@@ -120,18 +120,20 @@ public class Node extends AbstractActor {
     }
 
     static public class CommitRequest implements Serializable {
-        public final DataItem dataItem;
+        public final int key;
+        public final String value;
 
-        public CommitRequest(DataItem dataItem) {
-            this.dataItem = dataItem;
+        public CommitRequest(int key, String value) {
+            this.key = key;
+            this.value = value;
         }
     }
 
     static public class UnlockRequest implements Serializable {
-        public final DataItem dataItem;
+        public final int key;
 
-        public UnlockRequest(DataItem dataItem) {
-            this.dataItem = dataItem;
+        public UnlockRequest(int key) {
+            this.key = key;
         }
     }
 
@@ -145,7 +147,8 @@ public class Node extends AbstractActor {
                 .match(ClientRequest.class, this::onClientRequest)
                 .match(LockRequest.class, this::onLockRequest)
                 .match(LockResponse.class, this::onLockResponse)
-                .match(DataUpdateMessage.class, this::onDataUpdateMessage)
+                .match(UnlockRequest.class, this::onUnlockRequest)
+                .match(CommitRequest.class, this::onCommitRequest)
                 .build();
     }
 
@@ -287,12 +290,19 @@ public class Node extends AbstractActor {
         } else {
             // this is executed when we are trying to add a new data item to the storage of
             // the server
+            // TODO: What if several servers are trying to add the same data item? We are not adding
+            // a lock for the new data item and we are did not implement a function to remove the
+            // item that was added for the first time if it can not be added to all of the nodes.
             getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, false), true), getSelf());
         }
     }
 
     public void onLockResponse(LockResponse lockResponse) {
         Request r = requests.get(lockResponse.dataItem.getKey());
+        // if r is null it means that the request has already been handled
+        if (r == null) {
+            return;
+        }
         r.receivedResponse();
         System.out.println("received response ");
         if (lockResponse.requestState) {
@@ -301,35 +311,49 @@ public class Node extends AbstractActor {
         if (r.canCommit() && r.getState() == State.PENDING) {
             r.setState(State.COMMITTING);
             System.out.println("received enough locks to commit " + r.getKey());
-            // start committing phase
+            // Get handlers
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getKey(), Constants.N);
+            // Send data commit request to handlers
+            for (Element<ActorRef> el : handlers.values()) {
+                el.value.tell(new CommitRequest(r.getKey(), r.getValue()), getSelf());
+            }
+            requests.remove(r.getKey());
         }
         if (!r.mayBePerformed()) {
-            // abort
+            // Get handlers
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getKey(), Constants.N);
+            // Send Unlock request to handlers
+            for (Element<ActorRef> el : handlers.values()) {
+                el.value.tell(new UnlockRequest(r.getKey()), getSelf());
+            }
+            // remove r from te requests
+            requests.remove(r.getKey());
         }
     }
 
-    private void propagateUpdate(DataUpdateMessage msg) {
-        int c = 0;
+    public void onUnlockRequest(UnlockRequest unlockRequest) {
+        // TODO: check if the lock is for the node that is asking to unlock,
+        // otherwise we can unlock a data item that we don't own.
+        // With the current implementation it is not possible to do this.
+        // We also need to store who locked the data item in DataItem class.
+        if (storage.containsKey(unlockRequest.key)) {
+            storage.get(unlockRequest.key).setLock(false);
+        }
     }
 
-    private void onDataUpdateMessage(DataUpdateMessage msg) {
-        // TODO: modify method
-        if (getSender().path().name().startsWith("node")) {// this means the event has been triggered by another Server
-            // if request arrives from another server send back to it the information
-            // regarding the data item
-        } else {// this means the event has been triggered by a request from a Client
-                // if received from a client, ask other servers, collect data and then send back
-                // to client (check for timeout)
-            if (storage.containsKey(msg.key)) {
-                DataItem storedItem = storage.get(msg.key);
-                storedItem.setVersion(storedItem.getVersion() + 1);
-                storedItem.setValue(msg.value);
-            } else {
-                storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
-            }
-            for (DataItem d : storage.values()) {
-                System.out.println(this.id + ": " + d.toString());
-            }
+
+    private void onCommitRequest(CommitRequest msg) {
+        if (storage.containsKey(msg.key)) {
+            DataItem storedItem = storage.get(msg.key);
+            storedItem.setVersion(storedItem.getVersion() + 1);
+            storedItem.setValue(msg.value);
+            // Unlock data item
+            storedItem.setLock(false);
+        } else {
+            storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
+        }
+        for (DataItem d : storage.values()) {
+            System.out.println(this.id + ": " + d.toString());
         }
     }
 
