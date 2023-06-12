@@ -61,7 +61,7 @@ public class Solution {
         // //headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
         
         ClientRequest cr = new ClientRequest(new Request(35,"test",Type.UPDATE));
-        ClientRequest cr2 = new ClientRequest(new Request(40,"test",Type.UPDATE));
+        ClientRequest cr2 = new ClientRequest(new Request(803,"test",Type.UPDATE));
         ClientRequest cr3 = new ClientRequest(new Request(35,"test2",Type.UPDATE));
         headRef.tell(cr ,ActorRef.noSender());
         headRef.tell(cr2 ,ActorRef.noSender());
