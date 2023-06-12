@@ -168,6 +168,23 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
         return handlers;
     }
 
+    public Element<T> getNextN(int key, int n) {
+        if (head == null) {
+            return null;
+        }
+        int mod = head.key + head.prev.key;
+        key = key % mod;
+
+        Element<T> current = head;
+        while (current.key < key) {
+            current = current.next;
+        }
+        for (int i = 0; i < n; i++) {
+            current = current.next;
+        }
+        return current;
+    }
+
     @Override
     public String toString() {
         if (head == null) {
