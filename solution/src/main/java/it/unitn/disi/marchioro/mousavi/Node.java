@@ -6,6 +6,7 @@ import akka.actor.Props;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.Map;
 
 public class Node extends AbstractActor {
     private int id, key;
@@ -31,13 +32,13 @@ public class Node extends AbstractActor {
 
     // constructors
     public Node(int id, int key) {
-        this(id, key, new HashMap<Integer, String>());
+        this(id, key, new HashMap<Integer, DataItem>());
     }
 
-    public Node(int id, int key, HashMap<Integer, String> storage) {
+    public Node(int id, int key, HashMap<Integer, DataItem> storage) {
         this.id = id;
         this.key = key;
-        this.storage = (HashMap<Integer, DataItem>) storage.clone();
+        this.storage = storage;
         this.group = new SortedCircularDoublyLinkedList<ActorRef>();
         this.group.add(key, getSelf());
         this.requests = new HashMap<>();
@@ -85,9 +86,11 @@ public class Node extends AbstractActor {
 
     static public class JoinNode {
         public final SortedCircularDoublyLinkedList<ActorRef> group;
+        public final int nodeKey;
 
-        public JoinNode(SortedCircularDoublyLinkedList<ActorRef> group) {
+        public JoinNode(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey) {
             this.group = group;
+            this.nodeKey = nodeKey;
         }
     }
 
@@ -137,6 +140,30 @@ public class Node extends AbstractActor {
         }
     }
 
+    static public class WriteAfterGroupChange implements Serializable {
+        public final int key;
+        public final String value;
+        public final int version;
+
+        public WriteAfterGroupChange(int key, String value, int version) {
+            this.key = key;
+            this.value = value;
+            this.version = version;
+        }
+    }
+
+    static public class RemoveAfterGroupChange implements Serializable {
+        public final int key;
+
+        public RemoveAfterGroupChange(int key) {
+            this.key = key;
+        }
+    }
+
+    static public class PrintStorage {
+
+    }
+
     @Override
     public Receive createReceive() {
         return receiveBuilder()
@@ -149,6 +176,9 @@ public class Node extends AbstractActor {
                 .match(LockResponse.class, this::onLockResponse)
                 .match(UnlockRequest.class, this::onUnlockRequest)
                 .match(CommitRequest.class, this::onCommitRequest)
+                .match(WriteAfterGroupChange.class, this::onWriteAfterGroupChange)
+                .match(RemoveAfterGroupChange.class, this::onRemoveAfterGroupChange)
+                .match(PrintStorage.class, this::onPrintStorage)
                 .build();
     }
 
@@ -163,6 +193,40 @@ public class Node extends AbstractActor {
 
     private void onJoinNode(JoinNode joinNode) {
         this.group = joinNode.group;
+        int nodeKey = joinNode.nodeKey;
+
+        // Check if the new node is the next node after me
+        if (this.group.getNextElement(this.key).key == nodeKey) {
+            int newNodeNextKey = this.group.getNextElement(nodeKey).key;
+            for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
+                int dataKey = entry.getKey();
+                // If this statement is true, it means that the storing of the dataKey should be
+                // started from the newly joined node and it should be removed from this node.
+                if (dataKey >= nodeKey && dataKey < newNodeNextKey) {
+                    DataItem dataItem = entry.getValue();
+                    WriteAfterGroupChange writeAfterGroupChange = new WriteAfterGroupChange(dataKey, dataItem.getValue(),
+                            dataItem.getVersion());
+                    this.group.getElement(nodeKey).value.tell(writeAfterGroupChange, getSender());
+                    storage.remove(dataKey);
+                }
+            }
+        }
+
+        // Check if the new node is the previous node before me
+        if (this.group.getPrevElement(this.key).key == nodeKey) {
+            for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
+                int dataKey = entry.getKey();
+                if (dataKey < this.key) {
+                    DataItem dataItem = entry.getValue();
+                    WriteAfterGroupChange writeAfterGroupChange = new WriteAfterGroupChange(dataKey, dataItem.getValue(),
+                            dataItem.getVersion());
+                    this.group.getElement(nodeKey).value.tell(writeAfterGroupChange, getSender());
+                    ActorRef nodeRef = this.group.getNextN(dataKey, Constants.N).value;
+                    nodeRef.tell(new RemoveAfterGroupChange(dataKey), getSender());
+                }
+            }
+        }
+
         System.out.println("My key: " + this.key);
         System.out.println("New node joined the group");
         System.out.println(this.group);
@@ -180,10 +244,12 @@ public class Node extends AbstractActor {
         ActorRef nodeRef = joinNodeCoordinator.nodeRef;
         // JoinNode joinNode = new JoinNode(nodeKey, nodeRef);
         this.group.add(nodeKey, nodeRef);
-        JoinNode joinNode = new JoinNode(this.group);
+        JoinNode joinNode = new JoinNode(this.group, nodeKey);
         for (Element<ActorRef> otherNode : this.group) {
-            if (otherNode.key == this.key)
-                continue;
+            // It should also tell it self so it can handle data distribution if the coordinator is
+            // the next or previous node of the new node.
+            // if (otherNode.key == this.key)
+            //     continue;
             otherNode.value.tell(joinNode, getSelf());
         }
         // for (Element<ActorRef> otherNode = this.group.getElement(this.key).next;
@@ -355,6 +421,22 @@ public class Node extends AbstractActor {
         for (DataItem d : storage.values()) {
             System.out.println(this.id + ": " + d.toString());
         }
+    }
+
+    private void onWriteAfterGroupChange(WriteAfterGroupChange msg) {
+        storage.put(msg.key, new DataItem(msg.key, msg.value, msg.version));
+    }
+
+    private void onRemoveAfterGroupChange(RemoveAfterGroupChange msg) {
+        storage.remove(msg.key);
+    }
+
+    private void onPrintStorage(PrintStorage msg) {
+        String s = "My key is " + this.key + "\n";
+        for (DataItem d : storage.values()) {
+            s += d.toString() + "\n";
+        }
+        System.out.println(s);
     }
 
     // // Message used to communicate group updates: Nodes joining/leaving, also

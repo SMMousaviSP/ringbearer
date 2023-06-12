@@ -3,6 +3,7 @@ package it.unitn.disi.marchioro.mousavi;
 import it.unitn.disi.marchioro.mousavi.Node.JoinNodeCoordinator;
 import it.unitn.disi.marchioro.mousavi.Node.LeaveNodeCoordinator;
 import it.unitn.disi.marchioro.mousavi.Node.ClientRequest;
+import it.unitn.disi.marchioro.mousavi.Node.PrintStorage;
 // import it.unitn.disi.marchioro.mousavi.Node.*;
 // import it.unitn.disi.marchioro.mousavi.SortedCircularDoublyLinkedList.*;
 import akka.actor.ActorRef;
@@ -73,7 +74,50 @@ public class Solution {
         }
         headRef.tell(cr3 ,ActorRef.noSender());
 
+        // Joining a new node with key == 45
+        ActorRef actorRef = system.actorOf(Node.props(6, 45), "node" + 6);
 
+        // for (Element<ActorRef> el : actorList) {
+        //     System.out.println("*** Printing storage of node " + el.key);
+        // }
+
+        actorList.add(45, actorRef);
+
+        JoinNodeCoordinator joinNodeCoordinator = new JoinNodeCoordinator(45, actorRef);
+        headRef.tell(joinNodeCoordinator, ActorRef.noSender());
+
+        // sleep
+        try {
+            Thread.sleep(3000); // wait for 1 second
+        } catch (InterruptedException e) {
+            // handle the exception
+        }
+
+        for (Element<ActorRef> el : actorList) {
+            System.out.println("*** Printing storage of node " + el.key);
+            el.value.tell(new PrintStorage(), ActorRef.noSender());
+            // sleep
+            try {
+                Thread.sleep(3000); // wait for 1 second
+            } catch (InterruptedException e) {
+                // handle the exception
+            }
+        }
+
+        // Printing the storage of all nodes
+        // for (Element<ActorRef> el : actorList) {
+        //     System.out.println("Printing storage of node " + el.key);
+        //     el.value.tell(new PrintStorage(), ActorRef.noSender());
+        //     // wait
+        //     try {
+        //         Thread.sleep(3000); // wait for 1 second
+        //     } catch (InterruptedException e) {
+        //         // handle the exception
+        //     }
+        // }
+        // for (Element<ActorRef> el : actorList) {
+        //     System.out.println(el.value);
+        // }
 
         // system shutdown
         try {
@@ -84,5 +128,6 @@ public class Solution {
         system.terminate();
 
     }
+
 
 }
