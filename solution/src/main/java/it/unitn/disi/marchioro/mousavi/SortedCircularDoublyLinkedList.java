@@ -2,7 +2,6 @@ package it.unitn.disi.marchioro.mousavi;
 
 import java.util.*;
 
-
 class Element<T> {
     int key;
     T value;
@@ -14,7 +13,6 @@ class Element<T> {
         this.value = value;
     }
 }
-
 
 public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     private Element<T> head;
@@ -36,7 +34,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
                 current = current.next;
             }
             if (previous == null) {
-                //Insert at the beginning
+                // Insert at the beginning
                 Element<T> last = head.prev;
                 newNode.next = head;
                 newNode.prev = last;
@@ -46,13 +44,13 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
                     head = newNode;
                 }
             } else if (current.next == head && current.key < key) {
-                //Insert at the end
+                // Insert at the end
                 newNode.next = head;
                 newNode.prev = current;
                 current.next = newNode;
                 head.prev = newNode;
             } else {
-                //Insert in the middle
+                // Insert in the middle
                 newNode.next = previous.next;
                 newNode.prev = previous;
                 previous.next = newNode;
@@ -62,13 +60,14 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     }
 
     public void remove(int key) {
-        if (head == null) return;
+        if (head == null)
+            return;
         Element<T> current = head;
         while (current.next != head && current.key != key) {
             current = current.next;
         }
         if (current.key == key) {
-            if (current.next == current) { //Only one node in the list
+            if (current.next == current) { // Only one node in the list
                 head = null;
             } else {
                 current.next.prev = current.prev;
@@ -128,7 +127,8 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
 
     public List<Integer> getSortedKeys() {
         List<Integer> sortedKeys = new ArrayList<>();
-        if (head == null) return sortedKeys;
+        if (head == null)
+            return sortedKeys;
         Element<T> current = head;
         do {
             sortedKeys.add(current.key);
@@ -139,25 +139,26 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     }
 
     // given a dataitem key, return n handlers for that data item
-    // n can also be set at compile time (N parameter), it shouldn't change during execution
-    public HashMap<Integer,Element<T>> getHandlers(int key, int n){
-        HashMap<Integer,Element<T>> handlers= new HashMap<>();
-        if (head != null)
-        {
+    // n can also be set at compile time (N parameter), it shouldn't change during
+    // execution
+    public HashMap<Integer, Element<T>> getHandlers(int key, int n) {
+        HashMap<Integer, Element<T>> handlers = new HashMap<>();
+        if (head != null) {
             Element<T> temp = head;
-            while(temp.key<key ){
-                temp=temp.next;
-                if(temp==head){
+            while (temp.key < key) {
+                temp = temp.next;
+                if (temp == head) {
                     return handlers;
                 }
             }
-            for(int i=0;i<n;i++){
+            for (int i = 0; i < n; i++) {
                 handlers.put(temp.key, temp);
-                temp=temp.next;
+                temp = temp.next;
             }
         }
         return handlers;
     }
+
     @Override
     public String toString() {
         if (head == null) {
