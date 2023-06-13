@@ -89,6 +89,12 @@ public class Node extends AbstractActor {
             this.nodeKey = nodeKey;
             this.nodeRef = nodeRef;
             this.updateType = updateType;
+
+            if (this.updateType == UpdateType.JOIN) {
+                this.group.add(this.nodeKey, this.nodeRef);
+            } else if (this.updateType == UpdateType.LEAVE) {
+                this.group.remove(this.nodeKey);
+            }
         }
     }
 
@@ -188,17 +194,8 @@ public class Node extends AbstractActor {
     }
 
     private void onGroupUpdate(GroupUpdate groupUpdate) {
-        int nodeKey = groupUpdate.nodeKey;
-        ActorRef nodeRef = groupUpdate.nodeRef;
-        UpdateType updateType = groupUpdate.updateType;
-
-        // In case the coordinator sending itself this message.
-        if (updateType == UpdateType.JOIN)
-            this.group.remove(nodeKey);
-        if (updateType == UpdateType.LEAVE)
-            this.group.add(nodeKey, nodeRef);
-
-
+        // TODO: instead of chacking the new position of every data item, we can check
+        // each data item only once.
         for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
             int dataKey = entry.getKey();
             
@@ -243,37 +240,28 @@ public class Node extends AbstractActor {
             // Throw exception if nodeKey is already in the group
             if (this.group.getElement(nodeKey) != null)
                 throw new IllegalArgumentException("The coordinator cannot join a node that is already in the group");
-            this.group.add(nodeKey, nodeRef);
         } else if (updateType == UpdateType.LEAVE) {
             if (nodeKey == this.key)
                 throw new IllegalArgumentException("The coordinator cannot leave itself");
             // Throw exception if nodeKey is not in the group
             if (this.group.getElement(nodeKey) == null)
                 throw new IllegalArgumentException("The coordinator cannot leave a node that is not in the group");
-            this.group.remove(nodeKey);
         }
 
-        GroupUpdate groupUpdate = new GroupUpdate(this.group, nodeKey, nodeRef, updateType);
 
-        if (updateType == UpdateType.LEAVE) {
+        if (updateType == UpdateType.JOIN) {
+            GroupUpdate groupUpdate = new GroupUpdate(this.group, nodeKey, nodeRef, updateType);
             nodeRef.tell(groupUpdate, getSelf());
         }
 
         for (Element<ActorRef> otherNode : this.group) {
-            // It should also tell it self so it can handle data distribution if the coordinator is
-            // the next or previous node of the new node.
-            // if (otherNode.key == this.key)
-            //     continue;
+            // groupUpdate should be initialized inside the loop to avoid sending the same
+            // object to all nodes.
+            GroupUpdate groupUpdate = new GroupUpdate(this.group, nodeKey, nodeRef, updateType);
             otherNode.value.tell(groupUpdate, getSelf());
         }
-        // for (Element<ActorRef> otherNode = this.group.getElement(this.key).next;
-        // otherNode.key != this.key; otherNode = otherNode.next) {
-        // otherNode.value.tell(joinNode, getSelf());
-        // }
 
-        // nodeRef.tell(newNode, getSelf());
-        System.out.println("Coordinator, My key: " + this.key);
-        // System.out.println("Node " + nodeKey + " joined group");
+        System.out.println("Coordinator - Group Update, My key: " + this.key);
         System.out.println(this.group);
         System.out.println();
     }
