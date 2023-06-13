@@ -195,35 +195,21 @@ public class Node extends AbstractActor {
         this.group = joinNode.group;
         int nodeKey = joinNode.nodeKey;
 
-        // Check if the new node is the next node after me
-        if (this.group.getNextElement(this.key).key == nodeKey) {
-            int newNodeNextKey = this.group.getNextElement(nodeKey).key;
-            for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
-                int dataKey = entry.getKey();
-                // If this statement is true, it means that the storing of the dataKey should be
-                // started from the newly joined node and it should be removed from this node.
-                if (dataKey >= nodeKey && dataKey < newNodeNextKey) {
-                    DataItem dataItem = entry.getValue();
-                    WriteAfterGroupChange writeAfterGroupChange = new WriteAfterGroupChange(dataKey, dataItem.getValue(),
-                            dataItem.getVersion());
-                    this.group.getElement(nodeKey).value.tell(writeAfterGroupChange, getSender());
-                    storage.remove(dataKey);
-                }
-            }
-        }
-
         // Check if the new node is the previous node before me
         if (this.group.getPrevElement(this.key).key == nodeKey) {
             for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
                 int dataKey = entry.getKey();
-                if (dataKey < this.key) {
-                    DataItem dataItem = entry.getValue();
-                    WriteAfterGroupChange writeAfterGroupChange = new WriteAfterGroupChange(dataKey, dataItem.getValue(),
-                            dataItem.getVersion());
-                    this.group.getElement(nodeKey).value.tell(writeAfterGroupChange, getSender());
-                    ActorRef nodeRef = this.group.getNextN(dataKey, Constants.N).value;
-                    nodeRef.tell(new RemoveAfterGroupChange(dataKey), getSender());
-                }
+                // All of the data items that are in the node after the new joined node should be
+                // added to the new node, except for the ones that considering their key, they
+                // can be stored starting from the node after the new node.
+                if (dataKey > nodeKey && dataKey <= this.key)
+                    continue; // The next node after the new node is the starting node for this data key
+                DataItem dataItem = entry.getValue();
+                WriteAfterGroupChange writeAfterGroupChange = new WriteAfterGroupChange(dataKey, dataItem.getValue(),
+                        dataItem.getVersion());
+                this.group.getElement(nodeKey).value.tell(writeAfterGroupChange, getSender());
+                ActorRef nodeRef = this.group.getNextN(dataKey, Constants.N).value;
+                nodeRef.tell(new RemoveAfterGroupChange(dataKey), getSender());
             }
         }
 
