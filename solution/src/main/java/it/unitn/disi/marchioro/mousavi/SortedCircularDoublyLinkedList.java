@@ -142,13 +142,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     // n can also be set at compile time (N parameter), it shouldn't change during
     // execution
     public HashMap<Integer, Element<T>> getHandlers(int key, int n) {
-        // Deciding on what number mod should be calculated to be able to handle
-        // all positive integers as key and distribute among the available nodes.
-        // This can be done in different ways, but for simplicity, we add the key
-        // of the first node to the last node and then calculate mod. If nodes are
-        // 10, 20, 30, 40, and 50, we calculate mod of 60. In this way the last
-        // node will be responsible for all keys between 50 and 60.
-        int mod = head.key + head.prev.key;
+        int mod = head.prev.key;
         key = key % mod;
         HashMap<Integer, Element<T>> handlers = new HashMap<>();
         if (head != null) {
@@ -172,7 +166,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
         if (head == null) {
             return null;
         }
-        int mod = head.key + head.prev.key;
+        int mod = head.prev.key;
         key = key % mod;
 
         Element<T> current = head;
