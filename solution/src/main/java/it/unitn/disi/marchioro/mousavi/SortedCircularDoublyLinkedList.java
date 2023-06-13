@@ -156,8 +156,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     // n can also be set at compile time (N parameter), it shouldn't change during
     // execution
     public HashMap<Integer, Element<T>> getHandlers(int key, int n) {
-        int mod = head.prev.key + 1;
-        key = key % mod;
+        key = normalizeKey(key);
         HashMap<Integer, Element<T>> handlers = new HashMap<>();
         if (head != null) {
             Element<T> temp = head;
@@ -180,14 +179,26 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
         if (head == null) {
             return null;
         }
-        int mod = head.prev.key + 1;
-        key = key % mod;
+        key = normalizeKey(key);
 
         Element<T> current = head;
         while (current.key < key) {
             current = current.next;
         }
         for (int i = 0; i < n; i++) {
+            current = current.next;
+        }
+        return current;
+    }
+
+    public Element<T> getFirstLargerEqualKey(int key) {
+        if (head == null) {
+            return null;
+        }
+        key = normalizeKey(key);
+
+        Element<T> current = head;
+        while (current.key < key) {
             current = current.next;
         }
         return current;
@@ -235,6 +246,21 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
                 return element;
             }
         };
+    }
+
+    private int normalizeKey(int key) {
+        if (head == null) {
+            return key;
+        }
+        int mod = this.getMod();
+        return key % mod;
+    }
+
+    private int getMod() {
+        if (head == null) {
+            return 0;
+        }
+        return head.prev.key + 1;
     }
 
 }
