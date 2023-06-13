@@ -194,36 +194,35 @@ public class Node extends AbstractActor {
     }
 
     private void onGroupUpdate(GroupUpdate groupUpdate) {
-        // TODO: instead of chacking the new position of every data item, we can check
-        // each data item only once.
         for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
             int dataKey = entry.getKey();
-            
-            DataItem dataItem = entry.getValue();
-            HashMap<Integer, Element<ActorRef>> prevHandlers = this.group.getHandlers(dataKey, Constants.N);
-            HashMap<Integer, Element<ActorRef>> newHandlers = groupUpdate.group.getHandlers(dataKey, Constants.N);
+            // Only check the data items that were written first in this node.
+            // To avoid checking the same data item more than once in different nodes.
+            if (this.group.getFirstLargerEqualKey(dataKey).key == this.key) {
+                DataItem dataItem = entry.getValue();
+                HashMap<Integer, Element<ActorRef>> prevHandlers = this.group.getHandlers(dataKey, Constants.N);
+                HashMap<Integer, Element<ActorRef>> newHandlers = groupUpdate.group.getHandlers(dataKey, Constants.N);
 
-            // prevHandlers - newHandlers are all the handlers than should no longer have the data
-            HashMap<Integer, Element<ActorRef>> toRemove = new HashMap<>(prevHandlers);
-            toRemove.keySet().removeAll(newHandlers.keySet());
-            for (Element<ActorRef> handler : toRemove.values()) {
-                handler.value.tell(new RemoveAfterGroupChange(dataKey), getSelf());
+                // prevHandlers - newHandlers are all the handlers than should no longer have the data
+                HashMap<Integer, Element<ActorRef>> toRemove = new HashMap<>(prevHandlers);
+                toRemove.keySet().removeAll(newHandlers.keySet());
+                for (Element<ActorRef> handler : toRemove.values()) {
+                    handler.value.tell(new RemoveAfterGroupChange(dataKey), getSelf());
+                }
+
+                // newHandlers - prevHandlers are all the handlers that should now have the data
+                HashMap<Integer, Element<ActorRef>> toAdd = new HashMap<>(newHandlers);
+                toAdd.keySet().removeAll(prevHandlers.keySet());
+                for (Element<ActorRef> handler : toAdd.values()) {
+                    handler.value.tell(new WriteAfterGroupChange(dataKey, dataItem.getValue(), dataItem.getVersion()),
+                            getSelf());
+                }
             }
-
-            // newHandlers - prevHandlers are all the handlers that should now have the data
-            HashMap<Integer, Element<ActorRef>> toAdd = new HashMap<>(newHandlers);
-            toAdd.keySet().removeAll(prevHandlers.keySet());
-            for (Element<ActorRef> handler : toAdd.values()) {
-                handler.value.tell(new WriteAfterGroupChange(dataKey, dataItem.getValue(), dataItem.getVersion()),
-                        getSelf());
-            }
-
         }
         
         this.group = groupUpdate.group;
 
-        System.out.println("My key: " + this.key);
-        System.out.println("New node joined the group");
+        System.out.println("Group Update - My key: " + this.key);
         System.out.println(this.group);
         System.out.println();
     }
