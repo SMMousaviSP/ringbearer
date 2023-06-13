@@ -1,11 +1,7 @@
 package it.unitn.disi.marchioro.mousavi;
 
-import it.unitn.disi.marchioro.mousavi.Node.JoinNodeCoordinator;
-import it.unitn.disi.marchioro.mousavi.Node.LeaveNodeCoordinator;
-import it.unitn.disi.marchioro.mousavi.Node.ClientRequest;
-import it.unitn.disi.marchioro.mousavi.Node.PrintStorage;
-// import it.unitn.disi.marchioro.mousavi.Node.*;
-// import it.unitn.disi.marchioro.mousavi.SortedCircularDoublyLinkedList.*;
+import it.unitn.disi.marchioro.mousavi.Node.*;
+
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 
@@ -46,9 +42,9 @@ public class Solution {
                 continue;
             }
 
-            JoinNodeCoordinator joinNodeCoordinator = new JoinNodeCoordinator(key, actorRef);
+            GroupUpdateCoordinator groupUpdateCoordinator = new GroupUpdateCoordinator(key, actorRef, UpdateType.JOIN);
             ActorRef headRef = actorList.getFirst().value;
-            headRef.tell(joinNodeCoordinator, ActorRef.noSender());
+            headRef.tell(groupUpdateCoordinator, ActorRef.noSender());
         }
 
         try {
@@ -83,8 +79,23 @@ public class Solution {
 
         actorList.add(45, actorRef);
 
-        JoinNodeCoordinator joinNodeCoordinator = new JoinNodeCoordinator(45, actorRef);
-        headRef.tell(joinNodeCoordinator, ActorRef.noSender());
+        GroupUpdateCoordinator groupUpdateCoordinator = new GroupUpdateCoordinator(45, actorRef, UpdateType.JOIN);
+        headRef.tell(groupUpdateCoordinator, ActorRef.noSender());
+
+        // sleep
+        try {
+            Thread.sleep(3000); // wait for 1 second
+        } catch (InterruptedException e) {
+            // handle the exception
+        }
+
+
+        // Leave node with key == 45
+
+        actorList.remove(45);
+
+        GroupUpdateCoordinator groupUpdateCoordinator2 = new GroupUpdateCoordinator(45, actorRef, UpdateType.LEAVE);
+        headRef.tell(groupUpdateCoordinator2, ActorRef.noSender());
 
         // sleep
         try {

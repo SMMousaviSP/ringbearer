@@ -1,12 +1,18 @@
 package it.unitn.disi.marchioro.mousavi;
 
 import akka.actor.AbstractActor;
+import akka.actor.Actor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+
+
+enum UpdateType {
+    JOIN, LEAVE
+}
 
 public class Node extends AbstractActor {
     private int id, key;
@@ -48,23 +54,18 @@ public class Node extends AbstractActor {
         return Props.create(Node.class, () -> new Node(id, value));
     }
 
-    static public class JoinNodeCoordinator {
+    static public class GroupUpdateCoordinator {
         public final int nodeKey;
         public final ActorRef nodeRef;
+        public final UpdateType updateType;
 
-        public JoinNodeCoordinator(int nodeKey, ActorRef nodeRef) {
+        public GroupUpdateCoordinator(int nodeKey, ActorRef nodeRef, UpdateType updateType) {
             this.nodeKey = nodeKey;
             this.nodeRef = nodeRef;
+            this.updateType = updateType;
         }
     }
 
-    public static class LeaveNodeCoordinator {
-        public final int nodeKey;
-
-        public LeaveNodeCoordinator(int nodeKey) {
-            this.nodeKey = nodeKey;
-        }
-    }
 
     // static public class JoinNode {
     // public final int nodeKey;
@@ -76,21 +77,18 @@ public class Node extends AbstractActor {
     // }
     // }
 
-    static public class LeaveNode {
-        public final SortedCircularDoublyLinkedList<ActorRef> group;
 
-        public LeaveNode(SortedCircularDoublyLinkedList<ActorRef> group) {
-            this.group = group;
-        }
-    }
-
-    static public class JoinNode {
+    static public class GroupUpdate {
         public final SortedCircularDoublyLinkedList<ActorRef> group;
         public final int nodeKey;
+        public final ActorRef nodeRef;
+        public final UpdateType updateType;
 
-        public JoinNode(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey) {
+        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef, UpdateType updateType) {
             this.group = group.clone();
             this.nodeKey = nodeKey;
+            this.nodeRef = nodeRef;
+            this.updateType = updateType;
         }
     }
 
@@ -167,10 +165,8 @@ public class Node extends AbstractActor {
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                .match(JoinNode.class, this::onJoinNode)
-                .match(JoinNodeCoordinator.class, this::onJoinNodeCoordinator)
-                .match(LeaveNodeCoordinator.class, this::onLeaveNodeCoordinator)
-                .match(LeaveNode.class, this::onLeaveNode)
+                .match(GroupUpdate.class, this::onGroupUpdate)
+                .match(GroupUpdateCoordinator.class, this::onGroupUpdateCoordinator)
                 .match(ClientRequest.class, this::onClientRequest)
                 .match(LockRequest.class, this::onLockRequest)
                 .match(LockResponse.class, this::onLockResponse)
@@ -191,11 +187,16 @@ public class Node extends AbstractActor {
                 .build();
     }
 
-    private void onJoinNode(JoinNode joinNode) {
-        int nodeKey = joinNode.nodeKey;
+    private void onGroupUpdate(GroupUpdate groupUpdate) {
+        int nodeKey = groupUpdate.nodeKey;
+        ActorRef nodeRef = groupUpdate.nodeRef;
+        UpdateType updateType = groupUpdate.updateType;
 
         // In case the coordinator sending itself this message.
-        this.group.remove(nodeKey);
+        if (updateType == UpdateType.JOIN)
+            this.group.remove(nodeKey);
+        if (updateType == UpdateType.LEAVE)
+            this.group.add(nodeKey, nodeRef);
 
 
         for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
@@ -203,7 +204,7 @@ public class Node extends AbstractActor {
             
             DataItem dataItem = entry.getValue();
             HashMap<Integer, Element<ActorRef>> prevHandlers = this.group.getHandlers(dataKey, Constants.N);
-            HashMap<Integer, Element<ActorRef>> newHandlers = joinNode.group.getHandlers(dataKey, Constants.N);
+            HashMap<Integer, Element<ActorRef>> newHandlers = groupUpdate.group.getHandlers(dataKey, Constants.N);
 
             // prevHandlers - newHandlers are all the handlers than should no longer have the data
             HashMap<Integer, Element<ActorRef>> toRemove = new HashMap<>(prevHandlers);
@@ -222,7 +223,7 @@ public class Node extends AbstractActor {
 
         }
         
-        this.group = joinNode.group;
+        this.group = groupUpdate.group;
 
         System.out.println("My key: " + this.key);
         System.out.println("New node joined the group");
@@ -230,24 +231,40 @@ public class Node extends AbstractActor {
         System.out.println();
     }
 
-    private void onJoinNodeCoordinator(JoinNodeCoordinator joinNodeCoordinator) {
-        int nodeKey = joinNodeCoordinator.nodeKey;
-        // Throw exception if nodeKey is the same as this.key
-        if (nodeKey == this.key)
-            throw new IllegalArgumentException("The coordinator cannot join itself");
-        // Throw exception if nodeKey is already in the group
-        if (this.group.getElement(nodeKey) != null)
-            throw new IllegalArgumentException("The coordinator cannot join a node that is already in the group");
-        ActorRef nodeRef = joinNodeCoordinator.nodeRef;
-        // JoinNode joinNode = new JoinNode(nodeKey, nodeRef);
-        this.group.add(nodeKey, nodeRef);
-        JoinNode joinNode = new JoinNode(this.group, nodeKey);
+    private void onGroupUpdateCoordinator(GroupUpdateCoordinator groupUpdateCoordinator) {
+        int nodeKey = groupUpdateCoordinator.nodeKey;
+        ActorRef nodeRef = groupUpdateCoordinator.nodeRef;
+        UpdateType updateType = groupUpdateCoordinator.updateType;
+
+        if (updateType == UpdateType.JOIN) {
+            // Throw exception if nodeKey is the same as this.key
+            if (nodeKey == this.key)
+                throw new IllegalArgumentException("The coordinator cannot join itself");
+            // Throw exception if nodeKey is already in the group
+            if (this.group.getElement(nodeKey) != null)
+                throw new IllegalArgumentException("The coordinator cannot join a node that is already in the group");
+            this.group.add(nodeKey, nodeRef);
+        } else if (updateType == UpdateType.LEAVE) {
+            if (nodeKey == this.key)
+                throw new IllegalArgumentException("The coordinator cannot leave itself");
+            // Throw exception if nodeKey is not in the group
+            if (this.group.getElement(nodeKey) == null)
+                throw new IllegalArgumentException("The coordinator cannot leave a node that is not in the group");
+            this.group.remove(nodeKey);
+        }
+
+        GroupUpdate groupUpdate = new GroupUpdate(this.group, nodeKey, nodeRef, updateType);
+
+        if (updateType == UpdateType.LEAVE) {
+            nodeRef.tell(groupUpdate, getSelf());
+        }
+
         for (Element<ActorRef> otherNode : this.group) {
             // It should also tell it self so it can handle data distribution if the coordinator is
             // the next or previous node of the new node.
             // if (otherNode.key == this.key)
             //     continue;
-            otherNode.value.tell(joinNode, getSelf());
+            otherNode.value.tell(groupUpdate, getSelf());
         }
         // for (Element<ActorRef> otherNode = this.group.getElement(this.key).next;
         // otherNode.key != this.key; otherNode = otherNode.next) {
@@ -256,49 +273,11 @@ public class Node extends AbstractActor {
 
         // nodeRef.tell(newNode, getSelf());
         System.out.println("Coordinator, My key: " + this.key);
-        System.out.println("Node " + nodeKey + " joined group");
+        // System.out.println("Node " + nodeKey + " joined group");
         System.out.println(this.group);
         System.out.println();
     }
 
-    private void onLeaveNodeCoordinator(LeaveNodeCoordinator leaveNodeCoordinator) {
-        int nodeKey = leaveNodeCoordinator.nodeKey;
-        // Throw exception if nodeKey is the same as this.key
-        if (nodeKey == this.key)
-            throw new IllegalArgumentException("The coordinator cannot leave itself");
-        // Throw exception if nodeKey is not in the group
-        if (this.group.getElement(nodeKey) == null)
-            throw new IllegalArgumentException("The coordinator cannot leave a node that is not in the group");
-        this.group.remove(nodeKey);
-        LeaveNode leaveNode = new LeaveNode(this.group);
-        for (Element<ActorRef> otherNode : this.group) {
-            if (otherNode.key == this.key)
-                continue;
-            otherNode.value.tell(leaveNode, getSelf());
-        }
-        System.out.println("Coordinator, My key: " + this.key);
-        System.out.println("Node " + nodeKey + " left group");
-        System.out.println(this.group);
-        System.out.println();
-    }
-
-    // private void onJoinNode(JoinNode joinNode) {
-    // int nodeKey = joinNode.nodeKey;
-    // ActorRef nodeRef = joinNode.nodeRef;
-    // this.group.add(nodeKey, nodeRef);
-    // System.out.println("My key: " + this.key);
-    // System.out.println("Node " + nodeKey + " joined group");
-    // System.out.println(this.group);
-    // System.out.println();
-    // }
-
-    private void onLeaveNode(LeaveNode leaveNode) {
-        this.group = leaveNode.group;
-        System.out.println("My key: " + this.key);
-        System.out.println("One node left the group");
-        System.out.println(this.group);
-        System.out.println();
-    }
 
     private void onClientRequest(ClientRequest clientRequest) {
 
