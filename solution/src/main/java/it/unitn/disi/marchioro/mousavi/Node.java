@@ -1,14 +1,12 @@
 package it.unitn.disi.marchioro.mousavi;
 
 import akka.actor.AbstractActor;
-import akka.actor.Actor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-
 
 enum UpdateType {
     JOIN, LEAVE
@@ -66,7 +64,6 @@ public class Node extends AbstractActor {
         }
     }
 
-
     // static public class JoinNode {
     // public final int nodeKey;
     // public final ActorRef nodeRef;
@@ -77,14 +74,14 @@ public class Node extends AbstractActor {
     // }
     // }
 
-
     static public class GroupUpdate {
         public final SortedCircularDoublyLinkedList<ActorRef> group;
         public final int nodeKey;
         public final ActorRef nodeRef;
         public final UpdateType updateType;
 
-        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef, UpdateType updateType) {
+        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef,
+                UpdateType updateType) {
             this.group = group.clone();
             this.nodeKey = nodeKey;
             this.nodeRef = nodeRef;
@@ -203,7 +200,8 @@ public class Node extends AbstractActor {
                 HashMap<Integer, Element<ActorRef>> prevHandlers = this.group.getHandlers(dataKey, Constants.N);
                 HashMap<Integer, Element<ActorRef>> newHandlers = groupUpdate.group.getHandlers(dataKey, Constants.N);
 
-                // prevHandlers - newHandlers are all the handlers than should no longer have the data
+                // prevHandlers - newHandlers are all the handlers than should no longer have
+                // the data
                 HashMap<Integer, Element<ActorRef>> toRemove = new HashMap<>(prevHandlers);
                 toRemove.keySet().removeAll(newHandlers.keySet());
                 for (Element<ActorRef> handler : toRemove.values()) {
@@ -219,7 +217,7 @@ public class Node extends AbstractActor {
                 }
             }
         }
-        
+
         this.group = groupUpdate.group;
 
         System.out.println("Group Update - My key: " + this.key);
@@ -247,7 +245,6 @@ public class Node extends AbstractActor {
                 throw new IllegalArgumentException("The coordinator cannot leave a node that is not in the group");
         }
 
-
         if (updateType == UpdateType.JOIN) {
             GroupUpdate groupUpdate = new GroupUpdate(this.group, nodeKey, nodeRef, updateType);
             nodeRef.tell(groupUpdate, getSelf());
@@ -264,7 +261,6 @@ public class Node extends AbstractActor {
         System.out.println(this.group);
         System.out.println();
     }
-
 
     private void onClientRequest(ClientRequest clientRequest) {
 
@@ -319,9 +315,11 @@ public class Node extends AbstractActor {
         } else {
             // this is executed when we are trying to add a new data item to the storage of
             // the server
-            // TODO: What if several servers are trying to add the same data item? We are not adding
-            // a lock for the new data item and we are did not implement a function to remove the
-            // item that was added for the first time if it can not be added to all of the nodes.
+
+            // TODO: What if several servers are trying to add the same data item? We are
+            // not adding a lock for the new data item and we are did not implement a
+            // function to remove the item that was added for the first time if it can not
+            // be added to all of the nodes.
             getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, false), true), getSelf());
         }
     }
@@ -370,7 +368,6 @@ public class Node extends AbstractActor {
         }
     }
 
-
     private void onCommitRequest(CommitRequest msg) {
         if (storage.containsKey(msg.key)) {
             DataItem storedItem = storage.get(msg.key);
@@ -401,15 +398,6 @@ public class Node extends AbstractActor {
         }
         System.out.println(s);
     }
-
-    // // Message used to communicate group updates: Nodes joining/leaving, also
-    // used to define initial system configuration
-    // public static class GroupUpdateMessage implements Serializable{
-    // public final CircularLinkedList group; // an array of group members
-    // public GroupUpdateMessage(CircularLinkedList group) {
-    // this.group =group;
-    // }
-    // }
 
     public static class DataUpdateMessage implements Serializable {
         public int key;

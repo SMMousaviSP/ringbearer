@@ -23,15 +23,15 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
 
     public SortedCircularDoublyLinkedList<T> clone() {
         SortedCircularDoublyLinkedList<T> newList = new SortedCircularDoublyLinkedList<>();
-    
+
         if (this.head != null) {
             Element<T> current = this.head;
             do {
-                newList.add(current.key, current.value);  // This assumes the 'value' can be safely shallow copied.
+                newList.add(current.key, current.value); // This assumes the 'value' can be safely shallow copied.
                 current = current.next;
             } while (current != this.head);
         }
-        
+
         return newList;
     }
 
@@ -164,7 +164,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
                 temp = temp.next;
                 // Why?
                 // if (temp == head) {
-                //     return handlers;
+                // return handlers;
                 // }
             }
             for (int i = 0; i < n; i++) {
