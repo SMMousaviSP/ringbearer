@@ -21,6 +21,20 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
         this.head = null;
     }
 
+    public SortedCircularDoublyLinkedList<T> clone() {
+        SortedCircularDoublyLinkedList<T> newList = new SortedCircularDoublyLinkedList<>();
+    
+        if (this.head != null) {
+            Element<T> current = this.head;
+            do {
+                newList.add(current.key, current.value);  // This assumes the 'value' can be safely shallow copied.
+                current = current.next;
+            } while (current != this.head);
+        }
+        
+        return newList;
+    }
+
     public void add(int key, T value) {
         Element<T> newNode = new Element<T>(key, value);
         if (head == null) {
