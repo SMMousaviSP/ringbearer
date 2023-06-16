@@ -4,13 +4,13 @@ public class DataItem implements Cloneable {
     private int key;
     private String value;
     private int version;
-    private boolean lock;
+    private int lock;
 
     public DataItem(int key, String value, int version) {
-        this(key, value, version, false);
+        this(key, value, version, -1);
     }
 
-    public DataItem(int key, String value, int version, boolean lock) {
+    public DataItem(int key, String value, int version, int lock) {
         this.key = key;
         this.value = value;
         this.version = version;
@@ -32,10 +32,12 @@ public class DataItem implements Cloneable {
     }
 
     public boolean isLock() {
+        return lock>=0;
+    }
+    public int getLocker(){
         return lock;
     }
-
-    public void setLock(boolean lock) {
+    public void setLock(int lock) {
         this.lock = lock;
     }
 

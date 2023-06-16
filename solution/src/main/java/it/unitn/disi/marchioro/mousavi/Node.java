@@ -106,10 +106,12 @@ public class Node extends AbstractActor {
     static public class LockRequest implements Serializable {
         public final int key;
         public final Type type;
+        public final int requesterID;
 
-        public LockRequest(int key, Type type) {
+        public LockRequest(int key, Type type,int requesterID) {
             this.key = key;
             this.type = type;
+            this.requesterID=requesterID;
         }
     }
 
@@ -126,18 +128,35 @@ public class Node extends AbstractActor {
     static public class CommitRequest implements Serializable {
         public final int key;
         public final String value;
+        public int version;
+        public final Type type;
 
-        public CommitRequest(int key, String value) {
+        public CommitRequest(int key, String value,int version, Type type) {
             this.key = key;
             this.value = value;
+            this.version=version;
+            this.type=type;
+        }
+
+    }
+
+    static public class CommitResponse implements Serializable{
+        public final DataItem dataItem;
+        public final boolean requestState; // true means success
+
+        public CommitResponse(DataItem dataItem, boolean requestState) {
+            this.dataItem = dataItem;
+            this.requestState = requestState;
         }
     }
 
     static public class UnlockRequest implements Serializable {
         public final int key;
+        public final int requesterID;
 
-        public UnlockRequest(int key) {
+        public UnlockRequest(int key,int requesterID) {
             this.key = key;
+            this.requesterID=requesterID;
         }
     }
 
@@ -175,10 +194,16 @@ public class Node extends AbstractActor {
                 .match(LockResponse.class, this::onLockResponse)
                 .match(UnlockRequest.class, this::onUnlockRequest)
                 .match(CommitRequest.class, this::onCommitRequest)
+                .match(CommitResponse.class, this::onCommitResponse)
                 .match(WriteAfterGroupChange.class, this::onWriteAfterGroupChange)
                 .match(RemoveAfterGroupChange.class, this::onRemoveAfterGroupChange)
                 .match(PrintStorage.class, this::onPrintStorage)
                 .build();
+    }
+
+    private void onCommitResponse(CommitResponse commitResponse) {
+        System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
+        //todo: send back response to client
     }
 
     public Receive crashed() {
@@ -277,7 +302,7 @@ public class Node extends AbstractActor {
             requests.get(clientRequest.request.getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key + " ");
-                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType()),
+                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),
                         getSelf());
             }
             System.out.println("");
@@ -290,7 +315,7 @@ public class Node extends AbstractActor {
             requests.get(clientRequest.request.getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key + " ");
-                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType()),
+                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),
                         getSelf());
             }
             System.out.println("");
@@ -302,7 +327,7 @@ public class Node extends AbstractActor {
     private void onLockRequest(LockRequest lockRequest) {
         if (storage.containsKey(lockRequest.key)) {
             if (!storage.get(lockRequest.key).isLock()) {
-                storage.get(lockRequest.key).setLock(true);
+                storage.get(lockRequest.key).setLock(lockRequest.requesterID);
                 getSender().tell(new LockResponse(storage.get(lockRequest.key), true), getSelf());
             } else {
                 getSender().tell(new LockResponse(storage.get(lockRequest.key), false), getSelf());
@@ -311,16 +336,20 @@ public class Node extends AbstractActor {
             // this part of code is executed if for some reason we are trying
             // to read a data from a server that doesn't hold it, probably
             // we can simply say we don't provide the lock
-            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, false), false), getSelf());
+            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, -1), false), getSelf());
         } else {
             // this is executed when we are trying to add a new data item to the storage of
             // the server
 
-            // TODO: What if several servers are trying to add the same data item? We are
+            // done: What if several servers are trying to add the same data item? We are
             // not adding a lock for the new data item and we are did not implement a
             // function to remove the item that was added for the first time if it can not
             // be added to all of the nodes.
-            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, false), true), getSelf());
+
+            //todo: test if this creates additional problems
+            DataItem suppDataItem= new DataItem(lockRequest.key, "", -1, lockRequest.requesterID);
+            storage.put(lockRequest.key, suppDataItem);
+            getSender().tell(new LockResponse(suppDataItem, true), getSelf());
         }
     }
 
@@ -341,8 +370,17 @@ public class Node extends AbstractActor {
             // Get handlers
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getKey(), Constants.N);
             // Send data commit request to handlers
+            CommitRequest commitRequest= new CommitRequest(r.getKey(),r.getValue(),lockResponse.dataItem.getVersion(),r.getType());
+            if(r.getType()==Type.UPDATE){
+                commitRequest.version++;
+            }
             for (Element<ActorRef> el : handlers.values()) {
-                el.value.tell(new CommitRequest(r.getKey(), r.getValue()), getSelf());
+                el.value.tell(commitRequest, getSelf());
+            }
+
+            // Send Unlock request to handlers
+            for (Element<ActorRef> el : handlers.values()) {
+                el.value.tell(new UnlockRequest(r.getKey(),getId()), getSelf());
             }
             requests.remove(r.getKey());
         }
@@ -351,7 +389,7 @@ public class Node extends AbstractActor {
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getKey(), Constants.N);
             // Send Unlock request to handlers
             for (Element<ActorRef> el : handlers.values()) {
-                el.value.tell(new UnlockRequest(r.getKey()), getSelf());
+                el.value.tell(new UnlockRequest(r.getKey(),getId()), getSelf());
             }
             // remove r from te requests
             requests.remove(r.getKey());
@@ -359,25 +397,41 @@ public class Node extends AbstractActor {
     }
 
     public void onUnlockRequest(UnlockRequest unlockRequest) {
-        // TODO: check if the lock is for the node that is asking to unlock,
+        // done: check if the lock is for the node that is asking to unlock,
         // otherwise we can unlock a data item that we don't own.
         // With the current implementation it is not possible to do this.
         // We also need to store who locked the data item in DataItem class.
-        if (storage.containsKey(unlockRequest.key)) {
-            storage.get(unlockRequest.key).setLock(false);
+        if (storage.containsKey(unlockRequest.key) && storage.get(unlockRequest.key).getLocker()==unlockRequest.requesterID) {
+            storage.get(unlockRequest.key).setLock(-1);
         }
     }
 
     private void onCommitRequest(CommitRequest msg) {
-        if (storage.containsKey(msg.key)) {
-            DataItem storedItem = storage.get(msg.key);
-            storedItem.setVersion(storedItem.getVersion() + 1);
-            storedItem.setValue(msg.value);
-            // Unlock data item
-            storedItem.setLock(false);
-        } else {
-            storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
+        if(msg.type==Type.UPDATE){
+            if (storage.containsKey(msg.key) && msg.version>=storage.get(msg.key).getVersion()) {
+                DataItem storedItem = storage.get(msg.key);
+                storedItem.setVersion(msg.version);
+                storedItem.setValue(msg.value);
+                getSender().tell(new CommitResponse(storedItem,true),getSelf());
+                // Unlock data item
+                //storedItem.setLock(false);
+                //this cannot be done here, it must be requested by the server after he sent all the commit messages
+            } else {
+                //storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
+                //this shouldn't happen, a commit can be requested only after
+                //a lockRequest that would have added the dataitem if not present
+            }
+        }else{
+            if (storage.containsKey(msg.key) && msg.version==storage.get(msg.key).getVersion()) {
+                DataItem storedItem = storage.get(msg.key);
+                getSender().tell(new CommitResponse(storedItem,true),getSelf());
+            }else {
+                //this shouldn't happen, a commit can be requested only after
+                //if the dataitem is not in the storage, we don't even provide locks
+                //making it impossible for a server to perform a CommitRequest
+            }
         }
+
         for (DataItem d : storage.values()) {
             System.out.println(this.id + ": " + d.toString());
         }
