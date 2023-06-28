@@ -103,14 +103,31 @@ public class Node extends AbstractActor {
         }
     }
 
-    static public class LockRequest implements Serializable {
+    static public class ReadRequest implements Serializable {
         public final int key;
-        public final Type type;
         public final int requesterID;
 
-        public LockRequest(int key, Type type,int requesterID) {
+        public ReadRequest(int key,int requesterID) {
             this.key = key;
-            this.type = type;
+            this.requesterID=requesterID;
+        }
+    }
+
+    static public class ReadResponse implements Serializable {
+        public final DataItem dataItem;
+        public final boolean requestState; // true means success
+
+        public ReadResponse(DataItem dataItem, boolean requestState) {
+            this.dataItem = dataItem;
+            this.requestState = requestState;
+        }
+    }
+    static public class LockRequest implements Serializable {
+        public final int key;
+        public final int requesterID;
+
+        public LockRequest(int key,int requesterID) {
+            this.key = key;
             this.requesterID=requesterID;
         }
     }
@@ -190,6 +207,8 @@ public class Node extends AbstractActor {
                 .match(GroupUpdate.class, this::onGroupUpdate)
                 .match(GroupUpdateCoordinator.class, this::onGroupUpdateCoordinator)
                 .match(ClientRequest.class, this::onClientRequest)
+                .match(ReadRequest.class, this::onReadRequest)
+                .match(ReadResponse.class, this::onReadResponse)
                 .match(LockRequest.class, this::onLockRequest)
                 .match(LockResponse.class, this::onLockResponse)
                 .match(UnlockRequest.class, this::onUnlockRequest)
@@ -202,8 +221,12 @@ public class Node extends AbstractActor {
     }
 
     private void onCommitResponse(CommitResponse commitResponse) {
-        System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
-        //todo: send back response to client
+        //System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
+        //if the key is not present the response's already being delivered to the client
+        if(requests.containsKey(commitResponse.dataItem.getKey())){
+            requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
+            requests.remove(commitResponse.dataItem.getKey());
+        }
     }
 
     public Receive crashed() {
@@ -289,41 +312,45 @@ public class Node extends AbstractActor {
 
     private void onClientRequest(ClientRequest clientRequest) {
 
-        if (requests.containsKey(clientRequest.request.getKey())) {
+        if (clientRequest.request.getType()==Type.UPDATE && requests.containsKey(clientRequest.request.getData().getKey())) {
             throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
         }
-        requests.put(clientRequest.request.getKey(), clientRequest.request);
+        requests.put(clientRequest.request.getData().getKey(), clientRequest.request);
         if (clientRequest.request.getType() == Type.READ) {
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getKey(),
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getData().getKey(),
                     Constants.N);
 
             System.out.println("client request to server " + getId() + " for data item "
-                    + clientRequest.request.getKey() + ", asking ");
-            requests.get(clientRequest.request.getKey()).setState(State.PENDING);
+                    + clientRequest.request.getData().getKey() + ", asking ");
+            requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key + " ");
-                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),
-                        getSelf());
+                el.value.tell(new ReadRequest(clientRequest.request.getData().getKey(),getId()),getSelf());
+                // don't request locks when reading, handle 3 cases:
+                // highest version with lock: abort (an update is being performed)
+                // else if highest version without lock: deliver highest version
+                //el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),getSelf());
             }
             System.out.println("");
         } else if (clientRequest.request.getType() == Type.UPDATE) {
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getKey(),
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getData().getKey(),
                     Constants.N);
 
             System.out.println("client request to server " + getId() + " for data item "
-                    + clientRequest.request.getKey() + ", asking ");
-            requests.get(clientRequest.request.getKey()).setState(State.PENDING);
+                    + clientRequest.request.getData().getKey() + ", asking ");
+            requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key + " ");
-                el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),
-                        getSelf());
+                el.value.tell(new LockRequest(clientRequest.request.getData().getKey(),getId()),getSelf());
             }
             System.out.println("");
         } else {
             throw new IllegalArgumentException("Request type not supported");
         }
     }
-
+    //TODO: add onrecover function: When a node recovers it will start asking clockwise for the first node that holds dataitem updates, then counterclockwise
+    //TODO: this function should now only handle update requests
+    //TODO: create new function to handle read requests
     private void onLockRequest(LockRequest lockRequest) {
         if (storage.containsKey(lockRequest.key)) {
             if (!storage.get(lockRequest.key).isLock()) {
@@ -332,12 +359,7 @@ public class Node extends AbstractActor {
             } else {
                 getSender().tell(new LockResponse(storage.get(lockRequest.key), false), getSelf());
             }
-        } else if (lockRequest.type == Type.READ) {
-            // this part of code is executed if for some reason we are trying
-            // to read a data from a server that doesn't hold it, probably
-            // we can simply say we don't provide the lock
-            getSender().tell(new LockResponse(new DataItem(lockRequest.key, "", 0, -1), false), getSelf());
-        } else {
+        }  else {
             // this is executed when we are trying to add a new data item to the storage of
             // the server
 
@@ -366,43 +388,82 @@ public class Node extends AbstractActor {
         }
         if (r.canCommit() && r.getState() == State.PENDING) {
             r.setState(State.COMMITTING);
-            System.out.println("received enough locks to commit " + r.getKey());
+            System.out.println("received enough locks to commit " + r.getData().getKey());
             // Get handlers
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getKey(), Constants.N);
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
             // Send data commit request to handlers
-            CommitRequest commitRequest= new CommitRequest(r.getKey(),r.getValue(),lockResponse.dataItem.getVersion(),r.getType());
+            CommitRequest commitRequest= new CommitRequest(r.getData().getKey(),r.getData().getValue(),lockResponse.dataItem.getVersion(),r.getType());
             if(r.getType()==Type.UPDATE){
                 commitRequest.version++;
+                requests.get(r.getData().getKey()).getData().setVersion(commitRequest.version);
             }
             for (Element<ActorRef> el : handlers.values()) {
                 el.value.tell(commitRequest, getSelf());
             }
-
-            // Send Unlock request to handlers
-            for (Element<ActorRef> el : handlers.values()) {
-                el.value.tell(new UnlockRequest(r.getKey(),getId()), getSelf());
-            }
-            requests.remove(r.getKey());
         }
         if (!r.mayBePerformed()) {
             // Get handlers
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getKey(), Constants.N);
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
             // Send Unlock request to handlers
             for (Element<ActorRef> el : handlers.values()) {
-                el.value.tell(new UnlockRequest(r.getKey(),getId()), getSelf());
+                el.value.tell(new UnlockRequest(r.getData().getKey(),getId()), getSelf());
             }
             // remove r from te requests
-            requests.remove(r.getKey());
+            requests.remove(r.getData().getKey());
+        }
+    }
+    private void onReadRequest(ReadRequest readRequest) {
+        if (storage.containsKey(readRequest.key)) {
+            getSender().tell(new LockResponse(storage.get(readRequest.key), true), getSelf());
+        }  else {
+            // this is executed when we are trying to read a data item not present in the storage
+            DataItem suppDataItem= new DataItem(readRequest.key, "", -1, -1);
+            getSender().tell(new ReadResponse(suppDataItem, false), getSelf());
         }
     }
 
+    public void onReadResponse(ReadResponse readResponse) {
+        Request r = requests.get(readResponse.dataItem.getKey());
+        // if r is null it means that the request has already been handled
+        if (r == null) {
+            return;
+        }
+        r.receivedResponse();
+        System.out.println("received response ");
+        if (readResponse.requestState) {
+            r.acquiredLock();
+            if(r.getData().getVersion()<readResponse.dataItem.getVersion() || (r.getData().getVersion()==readResponse.dataItem.getVersion() && readResponse.dataItem.isLock())){
+                r.setData(readResponse.dataItem);
+            }
+        }
+        if (r.canCommit() && r.getState() == State.PENDING) {
+            r.setState(State.COMMITTING);
+            if(r.getData().isLock()){
+                //abort
+                r.getClient().tell(r.getData(),getSelf());
+            }else{
+                //success
+                r.getClient().tell(r.getData(),getSelf());
+            }
+            requests.remove(r.getData().getKey());
+        }
+        if (!r.mayBePerformed()) {
+            //abort
+            r.getClient().tell(r.getData(),getSelf());
+        }
+    }
     public void onUnlockRequest(UnlockRequest unlockRequest) {
-        // done: check if the lock is for the node that is asking to unlock,
+        // check if the lock is for the node that is asking to unlock,
         // otherwise we can unlock a data item that we don't own.
-        // With the current implementation it is not possible to do this.
-        // We also need to store who locked the data item in DataItem class.
+
+        //we only create UnlockRequests when we abort an update operation
         if (storage.containsKey(unlockRequest.key) && storage.get(unlockRequest.key).getLocker()==unlockRequest.requesterID) {
-            storage.get(unlockRequest.key).setLock(-1);
+            //if version is -1 we simply delete the object from the storage since there has never been a successful update to the object
+            if(storage.get(unlockRequest.key).getVersion()==-1){
+                storage.remove(unlockRequest.key);
+            }else{
+                storage.get(unlockRequest.key).setLock(-1);
+            }
         }
     }
 
@@ -414,7 +475,7 @@ public class Node extends AbstractActor {
                 storedItem.setValue(msg.value);
                 getSender().tell(new CommitResponse(storedItem,true),getSelf());
                 // Unlock data item
-                //storedItem.setLock(false);
+                storedItem.setLock(-1);
                 //this cannot be done here, it must be requested by the server after he sent all the commit messages
             } else {
                 //storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
