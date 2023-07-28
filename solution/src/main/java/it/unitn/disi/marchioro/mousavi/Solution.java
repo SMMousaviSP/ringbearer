@@ -46,7 +46,7 @@ public class Solution {
         }
 
         try {
-            Thread.sleep(300); // wait for 1 second
+            Thread.sleep(3000); // wait for 1 second
         } catch (InterruptedException e) {
             // handle the exception
         }
@@ -60,6 +60,7 @@ public class Solution {
         ClientRequest cr3 = new ClientRequest(new Request(35, "test2", Type.UPDATE,client));
         ClientRequest cr4 = new ClientRequest(new Request(35, Type.READ,client));
         headRef.tell(cr, client);
+
         headRef.tell(cr2, client);
         // sleep
         try {

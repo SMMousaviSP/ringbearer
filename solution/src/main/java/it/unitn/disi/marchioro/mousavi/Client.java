@@ -18,6 +18,8 @@ public class Client extends AbstractActor {
     private void onDataItem(DataItem dataItem) {
         if(dataItem.getVersion()!=-1){
             System.out.println("client received dataitem "+dataItem.toString());
+        }else{
+            System.out.println("request for dataitem "+dataItem.getVersion()+" could not be fulfilled by the system");
         }
     }
 
