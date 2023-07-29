@@ -82,4 +82,16 @@ public class Request {
         int minimum = type == Type.READ ? Constants.R : Constants.W;
         return locks >= minimum; // maybe should it should be == to avoid multiple commits of the same dataitem
     }
+
+    @Override
+    public String toString() {
+        return "Request{" +
+                "state=" + state +
+                ", locks=" + locks +
+                ", type=" + type +
+                ", response_count=" + response_count +
+                ", data=" + data +
+                ", client=" + client +
+                '}';
+    }
 }

@@ -5,4 +5,7 @@ public class Constants {
     public final static int N = 3;
     public final static int R = 2;
     public final static int W = 2;
+
+    public final static boolean DEBUGGING =false;
+    public final static int CLIENTS_NUMBER = 4;
 }

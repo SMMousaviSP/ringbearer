@@ -6,9 +6,15 @@ import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Random;
 
 public class Solution {
-
+    public static ActorRef getRandomClient(ArrayList<ActorRef> clients){
+        int max=clients.size();
+        Random r= new Random();
+        return clients.get(r.nextInt(max));
+    }
     public static void main(String[] args) {
 
         final int M = Constants.M;
@@ -45,31 +51,39 @@ public class Solution {
             headRef.tell(groupUpdateCoordinator, ActorRef.noSender());
         }
 
-        try {
-            Thread.sleep(3000); // wait for 1 second
-        } catch (InterruptedException e) {
-            // handle the exception
+        ArrayList<ActorRef>clients= new ArrayList<>();
+        for(int i =1;i< Constants.CLIENTS_NUMBER+1;i++){
+            clients.add(system.actorOf((Client.props(i*100)), "client"+i+"00"));
         }
+        try {
+            Thread.sleep(1000); // wait for 1 second
+            System.out.println("Servers are ready to handle requests, press enter to continue");
+            System.in.read();
+        } catch (IOException ignored) {
+            System.out.println("Input stream error, closing the program ");
+            System.exit(1);
+        }
+        catch (InterruptedException e) {
+            System.out.println("Timeout error, closing the program ");
+            System.exit(1);
+        }
+        System.out.println("Generating 5 random requests to the same coordinator");
 
-        // LeaveNodeCoordinator leaveNodeCoordinator = new LeaveNodeCoordinator(40);
         ActorRef headRef = actorList.getFirst().value;
-        // //headRef.tell(leaveNodeCoordinator, ActorRef.noSender());
-        ActorRef client= system.actorOf(Client.props(100), "client100");
-        ClientRequest cr = new ClientRequest(new Request(35, "test", Type.UPDATE,client));
-        ClientRequest cr2 = new ClientRequest(new Request(803, "test", Type.UPDATE,client));
-        ClientRequest cr3 = new ClientRequest(new Request(35, "test2", Type.UPDATE,client));
-        ClientRequest cr4 = new ClientRequest(new Request(35, Type.READ,client));
-        headRef.tell(cr, client);
-
-        headRef.tell(cr2, client);
-        // sleep
+        Random r= new Random();
+        for(int i=0;i<5;i++){
+            ActorRef client= getRandomClient(clients);
+            Request req= new Request(r.nextInt(100),"value"+r.nextInt(1000),r.nextInt(2)==1?Type.READ:Type.UPDATE,client);
+            System.out.println("Sending request ("+req.toString()+") to "+actorList.getFirst().key);
+            ClientRequest cr= new ClientRequest(req);
+            headRef.tell(cr,client);
+        }
         try {
             Thread.sleep(300); // wait for 1 second
         } catch (InterruptedException e) {
             // handle the exception
         }
-        headRef.tell(cr4, client);
-        headRef.tell(cr3, client);
+
 
         // Joining a new node with key == 45
         ActorRef actorRef = system.actorOf(Node.props(6, 45), "node" + 6);
@@ -93,7 +107,7 @@ public class Solution {
         // Leave node with key == 45
 
         actorList.remove(45);
-        headRef.tell(cr4, client);
+        //headRef.tell(cr4, client);
 
         GroupUpdateCoordinator groupUpdateCoordinator2 = new GroupUpdateCoordinator(45, actorRef, UpdateType.LEAVE);
         headRef.tell(groupUpdateCoordinator2, ActorRef.noSender());
@@ -125,5 +139,6 @@ public class Solution {
         system.terminate();
 
     }
+
 
 }

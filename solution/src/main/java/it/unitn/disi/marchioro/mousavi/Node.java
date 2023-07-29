@@ -3,6 +3,7 @@ package it.unitn.disi.marchioro.mousavi;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
+import scala.collection.immutable.Stream;
 import scala.concurrent.duration.Duration;
 
 import javax.xml.crypto.Data;
@@ -253,22 +254,21 @@ public class Node extends AbstractActor {
 
 
     private void onCommitResponse(CommitResponse commitResponse) {
-        //System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
+        if(Constants.DEBUGGING)
+            System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
         //if the key is not present the response's already being delivered to the client
         if(requests.containsKey(commitResponse.dataItem.getKey())){
             requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
             requests.remove(commitResponse.dataItem.getKey());
         }
     }
-
+    // if crashed ignore all messages
     public Receive crashed() {
         return receiveBuilder()
                 .match(Recovery.class,this::onRecovery)
                 .match(ClientRequest.class, this::onRequestToCrashed)
                 .matchAny(msg -> {
-                })// if crashed ignore all messages
-                  // .matchAny(msg -> System.out.println(getSelf().path().name() + " ignoring " +
-                  // msg.getClass().getSimpleName() + " (crashed)"))
+                })
                 .build();
     }
 
@@ -313,9 +313,11 @@ public class Node extends AbstractActor {
 
         this.group = groupUpdate.group;
 
-        System.out.println("Group Update - My key: " + this.key);
-        System.out.println(this.group);
-        System.out.println();
+        if(Constants.DEBUGGING){
+            System.out.println("Group Update - My key: " + this.key);
+            System.out.println(this.group);
+            System.out.println();
+        }
     }
 
     private void onGroupUpdateCoordinator(GroupUpdateCoordinator groupUpdateCoordinator) {
@@ -350,9 +352,11 @@ public class Node extends AbstractActor {
             otherNode.value.tell(groupUpdate, getSelf());
         }
 
-        System.out.println("Coordinator - Group Update, My key: " + this.key);
-        System.out.println(this.group);
-        System.out.println();
+        if(Constants.DEBUGGING) {
+            System.out.println("Coordinator - Group Update, My key: " + this.key);
+            System.out.println(this.group);
+            System.out.println();
+        }
     }
 
     private void onClientRequest(ClientRequest clientRequest) {
@@ -366,8 +370,10 @@ public class Node extends AbstractActor {
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getData().getKey(),
                     Constants.N);
 
-            System.out.println("client request to server " + getId() + " for data item "
-                    + clientRequest.request.getData().getKey() + ", asking ");
+            if(Constants.DEBUGGING) {
+                System.out.println("client request to server " + getId() + " for data item "
+                        + clientRequest.request.getData().getKey() + ", asking ");
+            }
             requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key + " ");
@@ -377,13 +383,18 @@ public class Node extends AbstractActor {
                 // else if highest version without lock: deliver highest version
                 //el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),getSelf());
             }
-            System.out.println("");
+
+            if(Constants.DEBUGGING) {
+                System.out.println("");
+            }
         } else if (clientRequest.request.getType() == Type.UPDATE) {
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getData().getKey(),
                     Constants.N);
 
-            System.out.println("client request to server " + getId() + " for data item "
-                    + clientRequest.request.getData().getKey() + ", asking ");
+            if(Constants.DEBUGGING) {
+                System.out.println("client request to server " + getId() + " for data item "
+                        + clientRequest.request.getData().getKey() + ", asking ");
+            }
             requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
                 System.out.print(el.key + " ");
@@ -396,7 +407,9 @@ public class Node extends AbstractActor {
                 );
             }
 
-            System.out.println("");
+            if(Constants.DEBUGGING) {
+                System.out.println("");
+            }
         } else {
             throw new IllegalArgumentException("Request type not supported");
         }
@@ -469,7 +482,7 @@ public class Node extends AbstractActor {
             // the server
 
             // done: What if several servers are trying to add the same data item? We are
-            // not adding a lock for the new data item and we are did not implement a
+            // not adding a lock for the new data item and we did not implement a
             // function to remove the item that was added for the first time if it can not
             // be added to all of the nodes.
 
@@ -486,13 +499,19 @@ public class Node extends AbstractActor {
             return;
         }
         r.receivedResponse();
-        System.out.println("received response ");
+
+        if(Constants.DEBUGGING) {
+            System.out.println("received response ");
+        }
         if (lockResponse.requestState) {
             r.acquiredLock();
         }
         if (r.canCommit() && r.getState() == State.PENDING) {
             r.setState(State.COMMITTING);
-            System.out.println("received enough locks to commit " + r.getData().getKey());
+
+            if(Constants.DEBUGGING) {
+                System.out.println("received enough locks to commit " + r.getData().getKey());
+            }
             // Get handlers
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
             // Send data commit request to handlers
@@ -535,7 +554,10 @@ public class Node extends AbstractActor {
             return;
         }
         r.receivedResponse();
-        System.out.println("received response ");
+
+        if(Constants.DEBUGGING) {
+            System.out.println("received response ");
+        }
         if (readResponse.requestState) {
             r.acquiredLock();
             if(r.getData().getVersion()<readResponse.dataItem.getVersion() || (r.getData().getVersion()==readResponse.dataItem.getVersion() && readResponse.dataItem.isLock())){
@@ -546,15 +568,18 @@ public class Node extends AbstractActor {
             r.setState(State.COMMITTING);
             if(r.getData().isLock()){
                 //abort
+
                 r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
             }else{
                 //success
+
                 r.getClient().tell(r.getData(),getSelf());
             }
             requests.remove(r.getData().getKey());
         }
-        if (!r.mayBePerformed()) {
+        if (!r.mayBePerformed() && r.getState() == State.PENDING) {
             //abort
+            r.setState(State.ENDING);
             r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
         }
     }
@@ -598,8 +623,11 @@ public class Node extends AbstractActor {
             }
         }
 
-        for (DataItem d : storage.values()) {
-            System.out.println(this.id + ": " + d.toString());
+
+        if(Constants.DEBUGGING) {
+            for (DataItem d : storage.values()) {
+                System.out.println(this.id + ": " + d.toString());
+            }
         }
     }
 
