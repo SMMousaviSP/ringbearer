@@ -358,8 +358,8 @@ public class Node extends AbstractActor {
     private void onClientRequest(ClientRequest clientRequest) {
 
         if (clientRequest.request.getType()==Type.UPDATE && requests.containsKey(clientRequest.request.getData().getKey())) {
-            //TODO: replace with message beck to client
-            throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
+            getSender().tell(new DataItem(clientRequest.request.getData().getKey(),"",-1),getSelf());
+            //throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
         }
         requests.put(clientRequest.request.getData().getKey(), clientRequest.request);
         if (clientRequest.request.getType() == Type.READ) {
@@ -439,7 +439,6 @@ public class Node extends AbstractActor {
             }
         }
     }
-    //TODO: add onrecover function: When a node recovers it will start asking clockwise for the first node that holds dataitem updates, then counterclockwise
 
 
     private void onRecovery(Recovery recovery) {
@@ -457,8 +456,6 @@ public class Node extends AbstractActor {
         getContext().become(createReceive());
     }
 
-    //TODO: this function should now only handle update requests
-    //TODO: create new function to handle read requests
     private void onLockRequest(LockRequest lockRequest) {
         if (storage.containsKey(lockRequest.key)) {
             if (!storage.get(lockRequest.key).isLock()) {
@@ -476,7 +473,6 @@ public class Node extends AbstractActor {
             // function to remove the item that was added for the first time if it can not
             // be added to all of the nodes.
 
-            //todo: test if this creates additional problems
             DataItem suppDataItem= new DataItem(lockRequest.key, "", -1, lockRequest.requesterID);
             storage.put(lockRequest.key, suppDataItem);
             getSender().tell(new LockResponse(suppDataItem, true), getSelf());
