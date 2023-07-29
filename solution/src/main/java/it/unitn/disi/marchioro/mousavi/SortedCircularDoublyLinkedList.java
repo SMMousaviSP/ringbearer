@@ -16,9 +16,14 @@ class Element<T> {
 
 public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     private Element<T> head;
-
+    int size;
     public SortedCircularDoublyLinkedList() {
         this.head = null;
+        this.size=0;
+    }
+
+    public int getSize() {
+        return size;
     }
 
     public SortedCircularDoublyLinkedList<T> clone() {
@@ -71,6 +76,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
                 newNode.next.prev = newNode;
             }
         }
+        size++;
     }
 
     public void remove(int key) {
@@ -91,6 +97,7 @@ public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
                 }
             }
         }
+        size--;
     }
 
     public Element<T> getNextElement(int key) {

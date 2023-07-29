@@ -230,6 +230,7 @@ public class Node extends AbstractActor {
     }
 
     static public class PrintStorage implements Serializable {}
+    static public class Crash implements Serializable {}
 
     @Override
     public Receive createReceive() {
@@ -248,9 +249,15 @@ public class Node extends AbstractActor {
                 .match(RemoveAfterGroupChange.class, this::onRemoveAfterGroupChange)
                 .match(PrintStorage.class, this::onPrintStorage)
                 .match(AbortOperation.class, this::onAbortOperation)
+                .match(Crash.class,this::onCrash)
+                .match(StorageStateRequest.class,this::onStorageStateRequest)
+                .match(StorageStateResponse.class,this::onStorageStateResponse)
                 .build();
     }
 
+    private void onCrash(Crash crash) {
+        getContext().become(crashed());
+    }
 
 
     private void onCommitResponse(CommitResponse commitResponse) {
@@ -258,6 +265,8 @@ public class Node extends AbstractActor {
             System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
         //if the key is not present the response's already being delivered to the client
         if(requests.containsKey(commitResponse.dataItem.getKey())){
+
+            System.out.println("b");
             requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
             requests.remove(commitResponse.dataItem.getKey());
         }
@@ -267,6 +276,7 @@ public class Node extends AbstractActor {
         return receiveBuilder()
                 .match(Recovery.class,this::onRecovery)
                 .match(ClientRequest.class, this::onRequestToCrashed)
+                .match(PrintStorage.class, this::onPrintStorage)
                 .matchAny(msg -> {
                 })
                 .build();
@@ -275,9 +285,9 @@ public class Node extends AbstractActor {
     //if the coordinator contacted by the client is crashed, send back error after a few time, simulating a timeout in the connection
     private void onRequestToCrashed(ClientRequest request) {
         getContext().system().scheduler().scheduleOnce(
-                Duration.create(5000, TimeUnit.MILLISECONDS),
+                Duration.create(2000, TimeUnit.MILLISECONDS),
                 getSender(),
-                new DataItem(-1,"",-1), // message sent to myself
+                new DataItem(request.request.getData().getKey(),"",-1), // message sent to myself
                 getContext().system().dispatcher(), getSelf()
         );
     }
@@ -362,6 +372,8 @@ public class Node extends AbstractActor {
     private void onClientRequest(ClientRequest clientRequest) {
 
         if (clientRequest.request.getType()==Type.UPDATE && requests.containsKey(clientRequest.request.getData().getKey())) {
+
+            System.out.println("g");
             getSender().tell(new DataItem(clientRequest.request.getData().getKey(),"",-1),getSelf());
             //throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
         }
@@ -376,7 +388,10 @@ public class Node extends AbstractActor {
             }
             requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
-                System.out.print(el.key + " ");
+
+                if(Constants.DEBUGGING) {
+                    System.out.print(el.key + " ");
+                }
                 el.value.tell(new ReadRequest(clientRequest.request.getData().getKey(),getId()),getSelf());
                 // don't request locks when reading, handle 3 cases:
                 // highest version with lock: abort (an update is being performed)
@@ -397,10 +412,13 @@ public class Node extends AbstractActor {
             }
             requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
-                System.out.print(el.key + " ");
+
+                if(Constants.DEBUGGING) {
+                    System.out.print(el.key + " ");
+                }
                 el.value.tell(new LockRequest(clientRequest.request.getData().getKey(),getId()),getSelf());
                 getContext().system().scheduler().scheduleOnce(
-                        Duration.create(10000, TimeUnit.MILLISECONDS),
+                        Duration.create(4000, TimeUnit.MILLISECONDS),
                         getSelf(),
                         new AbortOperation(clientRequest.request.getData().getKey()),
                         getContext().system().dispatcher(), getSelf()
@@ -419,6 +437,8 @@ public class Node extends AbstractActor {
         //check if the operation is still in the queue, otherwise it has been already dealt with
         if(requests.containsKey(abortOperation.key)){
             //immediately communicate error to client
+            System.out.println("a");
+
             requests.get(abortOperation.key).getClient().tell(new DataItem(abortOperation.key, "", -1, -1),getSelf());
             //remove request from the list
             requests.remove(abortOperation.key);
@@ -426,7 +446,9 @@ public class Node extends AbstractActor {
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(abortOperation.key,
                     Constants.N);
             for (Element<ActorRef> el : handlers.values()) {
-                System.out.print(el.key + " ");
+                if(Constants.DEBUGGING){
+                    System.out.print(el.key + " ");
+                }
                 el.value.tell(new UnlockRequest(abortOperation.key,getId()),getSelf());
             }
         }
@@ -524,13 +546,15 @@ public class Node extends AbstractActor {
                 el.value.tell(commitRequest, getSelf());
             }
         }
-        if (!r.mayBePerformed()) {
+        if (!r.mayBePerformed() && r.getState() == State.PENDING) {
             // Get handlers
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
             // Send Unlock request to handlers
             for (Element<ActorRef> el : handlers.values()) {
                 el.value.tell(new UnlockRequest(r.getData().getKey(),getId()), getSelf());
             }
+
+            System.out.println("f");
             r.getClient().tell(new DataItem(r.getData().getKey(), "", -1, -1),getSelf());
             // remove r from te requests
             requests.remove(r.getData().getKey());
@@ -569,10 +593,12 @@ public class Node extends AbstractActor {
             if(r.getData().isLock()){
                 //abort
 
+                System.out.println("e");
                 r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
             }else{
                 //success
 
+                System.out.println("d");
                 r.getClient().tell(r.getData(),getSelf());
             }
             requests.remove(r.getData().getKey());
@@ -580,6 +606,8 @@ public class Node extends AbstractActor {
         if (!r.mayBePerformed() && r.getState() == State.PENDING) {
             //abort
             r.setState(State.ENDING);
+
+            System.out.println("c");
             r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
         }
     }
