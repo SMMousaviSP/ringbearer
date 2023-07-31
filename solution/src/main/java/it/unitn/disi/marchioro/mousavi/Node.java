@@ -85,8 +85,7 @@ public class Node extends AbstractActor {
         public final ActorRef nodeRef;
         public final UpdateType updateType;
 
-        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef,
-                UpdateType updateType) {
+        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef, UpdateType updateType) {
             this.group = group.clone();
             this.nodeKey = nodeKey;
             this.nodeRef = nodeRef;
@@ -260,17 +259,6 @@ public class Node extends AbstractActor {
     }
 
 
-    private void onCommitResponse(CommitResponse commitResponse) {
-        if(Constants.DEBUGGING)
-            System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
-        //if the key is not present the response's already being delivered to the client
-        if(requests.containsKey(commitResponse.dataItem.getKey())){
-
-            System.out.println("b");
-            requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
-            requests.remove(commitResponse.dataItem.getKey());
-        }
-    }
     // if crashed ignore all messages
     public Receive crashed() {
         return receiveBuilder()
@@ -282,7 +270,7 @@ public class Node extends AbstractActor {
                 .build();
     }
 
-    //if the coordinator contacted by the client is crashed, send back error after a few time, simulating a timeout in the connection
+    //if the coordinator contacted by the client is crashed, send back error after some time, simulating a timeout in the connection
     private void onRequestToCrashed(ClientRequest request) {
         getContext().system().scheduler().scheduleOnce(
                 Duration.create(2000, TimeUnit.MILLISECONDS),
@@ -528,24 +516,37 @@ public class Node extends AbstractActor {
         if (lockResponse.requestState) {
             r.acquiredLock();
         }
-        if (r.canCommit() && r.getState() == State.PENDING) {
-            r.setState(State.COMMITTING);
+        if(r.getState() == State.PENDING){
+            //get highest version
+            if(requests.get(lockResponse.dataItem.getKey()).getData().getVersion()<lockResponse.dataItem.getVersion()){
+                requests.get(lockResponse.dataItem.getKey()).getData().setVersion(lockResponse.dataItem.getVersion());
+            }
+            if (r.canCommit() ) {
+                r.setState(State.COMMITTING);
 
-            if(Constants.DEBUGGING) {
-                System.out.println("received enough locks to commit " + r.getData().getKey());
-            }
-            // Get handlers
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
-            // Send data commit request to handlers
-            CommitRequest commitRequest= new CommitRequest(r.getData().getKey(),r.getData().getValue(),lockResponse.dataItem.getVersion(),r.getType());
-            if(r.getType()==Type.UPDATE){
-                commitRequest.version++;
-                requests.get(r.getData().getKey()).getData().setVersion(commitRequest.version);
-            }
-            for (Element<ActorRef> el : handlers.values()) {
-                el.value.tell(commitRequest, getSelf());
+                if(Constants.DEBUGGING) {
+                    System.out.println("received enough locks to commit " + r.getData().getKey());
+                }
+                // Get handlers
+                HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
+                // Send data commit request to handlers
+                CommitRequest commitRequest= new CommitRequest(r.getData().getKey(),r.getData().getValue(),requests.get(lockResponse.dataItem.getKey()).getData().getVersion(),r.getType());
+                if(r.getType()==Type.UPDATE){
+                    commitRequest.version++;
+                    requests.get(r.getData().getKey()).getData().setVersion(commitRequest.version);
+                }
+                for (Element<ActorRef> el : handlers.values()) {
+                    el.value.tell(commitRequest, getSelf());
+                }
+
+                if(requests.containsKey(lockResponse.dataItem.getKey())){
+                    System.out.println("b");
+                    requests.get(lockResponse.dataItem.getKey()).getClient().tell(requests.get(lockResponse.dataItem.getKey()).getData(),getSelf());
+                    requests.remove(lockResponse.dataItem.getKey());
+                }
             }
         }
+
         if (!r.mayBePerformed() && r.getState() == State.PENDING) {
             // Get handlers
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
@@ -627,35 +628,34 @@ public class Node extends AbstractActor {
     }
 
     private void onCommitRequest(CommitRequest msg) {
+        //this shouldn't be necessary. Only update requests can reach this branch
         if(msg.type==Type.UPDATE){
             if (storage.containsKey(msg.key) && msg.version>=storage.get(msg.key).getVersion()) {
                 DataItem storedItem = storage.get(msg.key);
                 storedItem.setVersion(msg.version);
                 storedItem.setValue(msg.value);
-                getSender().tell(new CommitResponse(storedItem,true),getSelf());
+                //getSender().tell(new CommitResponse(storedItem,true),getSelf());
                 // Unlock data item
                 storedItem.setLock(-1);
-                //this cannot be done here, it must be requested by the server after he sent all the commit messages
-            } else {
-                //storage.put(msg.key, new DataItem(msg.key, msg.value, 0));
-                //this shouldn't happen, a commit can be requested only after
+            }
+
+                //the storage contains key should always be true, a commit can be requested only after
                 //a lockRequest that would have added the dataitem if not present
-            }
-        }else{
-            if (storage.containsKey(msg.key) && msg.version==storage.get(msg.key).getVersion()) {
-                DataItem storedItem = storage.get(msg.key);
-                getSender().tell(new CommitResponse(storedItem,true),getSelf());
-            }else {
-                //if the dataitem is not in the storage, we don't even provide locks
-                //making it impossible for a server to perform a CommitRequest
-            }
         }
-
-
         if(Constants.DEBUGGING) {
             for (DataItem d : storage.values()) {
                 System.out.println(this.id + ": " + d.toString());
             }
+        }
+    }
+    private void onCommitResponse(CommitResponse commitResponse) {
+        if(Constants.DEBUGGING)
+            System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
+        //if the key is not present the response's already being delivered to the client
+        if(requests.containsKey(commitResponse.dataItem.getKey())){
+            System.out.println("b");
+            requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
+            requests.remove(commitResponse.dataItem.getKey());
         }
     }
 
