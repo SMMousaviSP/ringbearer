@@ -15,6 +15,20 @@ public class Solution {
         Random r= new Random();
         return clients.get(r.nextInt(max));
     }
+    public static void waitForInput(String message){
+        try {
+            Thread.sleep(1000); // wait for 1 second
+            System.out.println(message);
+            System.in.read();
+        } catch (IOException ignored) {
+            System.out.println("Input stream error, closing the program ");
+            System.exit(1);
+        }
+        catch (InterruptedException e) {
+            System.out.println("Timeout error, closing the program ");
+            System.exit(1);
+        }
+    }
     public static void main(String[] args) {
 
         // Create the actor system
@@ -50,20 +64,7 @@ public class Solution {
         for(int i =1;i< Constants.CLIENTS_NUMBER+1;i++){
             clients.add(system.actorOf((Client.props(i*100)), "client"+i+"00"));
         }
-        try {
-            Thread.sleep(1000); // wait for 1 second
-            System.out.println("Servers are ready to handle requests, press enter to continue");
-            System.in.read();
-        } catch (IOException ignored) {
-            System.out.println("Input stream error, closing the program ");
-            System.exit(1);
-        }
-        catch (InterruptedException e) {
-            System.out.println("Timeout error, closing the program ");
-            System.exit(1);
-        }
-
-        System.out.println("Generating 5 random requests to the same coordinator");
+        waitForInput("Servers are ready to handle requests, press enter to generate 5 random requests to the same coordinator");
         ActorRef headRef = actorList.getFirst().value;
         Random r= new Random();
         for(int i=0;i<5;i++){
@@ -80,7 +81,7 @@ public class Solution {
             }
         }
 
-        System.out.println("Generating 10 random requests to a random coordinator");
+        waitForInput("Generate 10 random requests to a random coordinator");
         for(int i=0;i<10;i++){
             ActorRef client= getRandomClient(clients);
             Request req= new Request(r.nextInt(5)*10,"value"+r.nextInt(1000),r.nextInt(2)==1?Type.READ:Type.UPDATE,client);
@@ -116,7 +117,7 @@ public class Solution {
             }
         }
         // Joining a new node with key == 45
-        System.out.println("Adding server with id 45");
+        waitForInput("Add server with id 45");
         ActorRef actorRef = system.actorOf(Node.props(6, 45), "node" + 6);
 
 
@@ -141,7 +142,7 @@ public class Solution {
             }
         }
 
-        System.out.println("Generating 10 random requests to a random coordinator");
+        waitForInput("Generate 10 random requests to a random coordinator");
         for(int i=0;i<10;i++){
             ActorRef client= getRandomClient(clients);
             Request req= new Request(r.nextInt(5)*10,"value"+r.nextInt(1000),r.nextInt(2)==1?Type.READ:Type.UPDATE,client);
@@ -178,7 +179,7 @@ public class Solution {
 
         // Leave node with key == 45
 
-        System.out.println("Removing server with id 45");
+        waitForInput("Remove server with id 45");
         actorList.remove(45);
         //headRef.tell(cr4, client);
 
@@ -203,11 +204,11 @@ public class Solution {
             }
         }
 
-        System.out.println("Crashing server "+actorList.getFirst().key);
+        waitForInput("Crash server "+actorList.getFirst().key);
         headRef.tell(new Crash(),headRef);
 
 
-        System.out.println("Generating 10 random requests (for items saved in 10) to a random coordinator");
+        waitForInput("Generate 10 random requests (for items saved in 10) to a random coordinator");
         for(int i=0;i<10;i++){
             ActorRef client= getRandomClient(clients);
             Request req= new Request(40+r.nextInt(3)*10,"value"+r.nextInt(1000),r.nextInt(2)==1?Type.READ:Type.UPDATE,client);
@@ -244,11 +245,11 @@ public class Solution {
 
 
 
-        System.out.println("Crashing server "+actorList.getFirst().next.key);
+        waitForInput("Crash server "+actorList.getFirst().next.key);
         actorList.getFirst().next.value.tell(new Crash(),headRef);
 
 
-        System.out.println("Generating 10 random requests to a random coordinator");
+        waitForInput("Generate 10 random requests to a random coordinator");
         for(int i=0;i<10;i++){
             ActorRef client= getRandomClient(clients);
             Request req= new Request(r.nextInt(5)*10,"value"+r.nextInt(1000),r.nextInt(2)==1?Type.READ:Type.UPDATE,client);
@@ -284,7 +285,7 @@ public class Solution {
         }
 
 
-        System.out.println("Recovering server "+actorList.getFirst().next.key);
+        waitForInput("Recover server "+actorList.getFirst().next.key);
         actorList.getFirst().next.value.tell(new Recovery(),headRef);
         try {
             Thread.sleep(5000); // wait for 5 second
@@ -301,7 +302,7 @@ public class Solution {
                 // handle the exception
             }
         }
-        System.out.println("Generating 15 random requests to a random coordinator");
+        waitForInput("Generate 15 random requests to a random coordinator");
         for(int i=0;i<15;i++){
             ActorRef client= getRandomClient(clients);
             Request req= new Request(r.nextInt(5)*10,"value"+r.nextInt(1000),r.nextInt(2)==1?Type.READ:Type.UPDATE,client);
@@ -335,7 +336,7 @@ public class Solution {
                 // handle the exception
             }
         }
-        System.out.println("Recovering server "+actorList.getFirst().key);
+        waitForInput("Recover server "+actorList.getFirst().key);
         actorList.getFirst().value.tell(new Recovery(),headRef);
         try {
             Thread.sleep(5000); // wait for 5 second
