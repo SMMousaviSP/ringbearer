@@ -360,8 +360,6 @@ public class Node extends AbstractActor {
     private void onClientRequest(ClientRequest clientRequest) {
 
         if (clientRequest.request.getType()==Type.UPDATE && requests.containsKey(clientRequest.request.getData().getKey())) {
-
-            System.out.println("g");
             getSender().tell(new DataItem(clientRequest.request.getData().getKey(),"",-1),getSelf());
             //throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
         }
@@ -425,8 +423,6 @@ public class Node extends AbstractActor {
         //check if the operation is still in the queue, otherwise it has been already dealt with
         if(requests.containsKey(abortOperation.key)){
             //immediately communicate error to client
-            System.out.println("a");
-
             requests.get(abortOperation.key).getClient().tell(new DataItem(abortOperation.key, "", -1, -1),getSelf());
             //remove request from the list
             requests.remove(abortOperation.key);
@@ -467,11 +463,11 @@ public class Node extends AbstractActor {
     private void onRecovery(Recovery recovery) {
         Element<ActorRef> groupElement= group.getElement(getKey());
         // start asking for updates
-        for (int i=0;i<Constants.N;i++){
+        for (int i=0;i<Constants.R;i++){
             Element<ActorRef> server= groupElement.next;
             server.value.tell(new StorageStateRequest(getKey(),getId()),getSelf());
         }
-        for (int i=0;i<Constants.N;i++){
+        for (int i=0;i<Constants.R;i++){
             Element<ActorRef> server= groupElement.prev;
             server.value.tell(new StorageStateRequest(getKey(),getId()),getSelf());
         }
@@ -540,7 +536,6 @@ public class Node extends AbstractActor {
                 }
 
                 if(requests.containsKey(lockResponse.dataItem.getKey())){
-                    System.out.println("b");
                     requests.get(lockResponse.dataItem.getKey()).getClient().tell(requests.get(lockResponse.dataItem.getKey()).getData(),getSelf());
                     requests.remove(lockResponse.dataItem.getKey());
                 }
@@ -554,8 +549,6 @@ public class Node extends AbstractActor {
             for (Element<ActorRef> el : handlers.values()) {
                 el.value.tell(new UnlockRequest(r.getData().getKey(),getId()), getSelf());
             }
-
-            System.out.println("f");
             r.getClient().tell(new DataItem(r.getData().getKey(), "", -1, -1),getSelf());
             // remove r from te requests
             requests.remove(r.getData().getKey());
@@ -593,13 +586,9 @@ public class Node extends AbstractActor {
             r.setState(State.COMMITTING);
             if(r.getData().isLock()){
                 //abort
-
-                System.out.println("e");
                 r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
             }else{
                 //success
-
-                System.out.println("d");
                 r.getClient().tell(r.getData(),getSelf());
             }
             requests.remove(r.getData().getKey());
@@ -607,8 +596,6 @@ public class Node extends AbstractActor {
         if (!r.mayBePerformed() && r.getState() == State.PENDING) {
             //abort
             r.setState(State.ENDING);
-
-            System.out.println("c");
             r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
         }
     }
@@ -630,6 +617,8 @@ public class Node extends AbstractActor {
     private void onCommitRequest(CommitRequest msg) {
         //this shouldn't be necessary. Only update requests can reach this branch
         if(msg.type==Type.UPDATE){
+            //the storage contains key should always be true, a commit can be requested only after
+            //a lockRequest that would have added the dataitem if not present
             if (storage.containsKey(msg.key) && msg.version>=storage.get(msg.key).getVersion()) {
                 DataItem storedItem = storage.get(msg.key);
                 storedItem.setVersion(msg.version);
@@ -639,8 +628,6 @@ public class Node extends AbstractActor {
                 storedItem.setLock(-1);
             }
 
-                //the storage contains key should always be true, a commit can be requested only after
-                //a lockRequest that would have added the dataitem if not present
         }
         if(Constants.DEBUGGING) {
             for (DataItem d : storage.values()) {
@@ -653,7 +640,6 @@ public class Node extends AbstractActor {
             System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
         //if the key is not present the response's already being delivered to the client
         if(requests.containsKey(commitResponse.dataItem.getKey())){
-            System.out.println("b");
             requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
             requests.remove(commitResponse.dataItem.getKey());
         }
