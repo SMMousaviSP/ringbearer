@@ -3,11 +3,9 @@ package it.unitn.disi.marchioro.mousavi;
 import akka.actor.AbstractActor;
 import akka.actor.Props;
 
-import javax.xml.crypto.Data;
-
-
 public class Client extends AbstractActor {
     private int id;
+
     @Override
     public Receive createReceive() {
         return receiveBuilder()
@@ -16,10 +14,10 @@ public class Client extends AbstractActor {
     }
 
     private void onDataItem(DataItem dataItem) {
-        if(dataItem.getVersion()!=-1){
-            System.out.println("client received dataitem "+dataItem.toString());
-        }else{
-            System.out.println("request for dataitem "+dataItem.getKey()+" could not be fulfilled by the system");
+        if (dataItem.getVersion() != -1) {
+            System.out.println("client received dataitem " + dataItem.toString());
+        } else {
+            System.out.println("request for dataitem " + dataItem.getKey() + " could not be fulfilled by the system");
         }
     }
 

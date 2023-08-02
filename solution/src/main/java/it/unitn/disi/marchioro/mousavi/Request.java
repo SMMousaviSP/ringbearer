@@ -1,9 +1,6 @@
 package it.unitn.disi.marchioro.mousavi;
 
 import akka.actor.ActorRef;
-import scala.collection.immutable.Stream;
-
-import javax.xml.crypto.Data;
 
 enum State {
     STARTING, PENDING, COMMITTING, ENDING
@@ -21,19 +18,18 @@ public class Request {
     private DataItem data;
     private ActorRef client;
 
-    public Request(int key, String value, Type type,ActorRef client) {
-        this.data=new DataItem(key,value,-1);
+    public Request(int key, String value, Type type, ActorRef client) {
+        this.data = new DataItem(key, value, -1);
         this.state = State.STARTING;
         this.locks = 0;
         this.type = type;
         this.response_count = 0;
-        this.client=client;
+        this.client = client;
     }
 
-    public Request(int key, Type type,ActorRef client) {
-        this(key, "", type,client);
+    public Request(int key, Type type, ActorRef client) {
+        this(key, "", type, client);
     }
-
 
     public ActorRef getClient() {
         return client;

@@ -17,9 +17,10 @@ class Element<T> {
 public class SortedCircularDoublyLinkedList<T> implements Iterable<Element<T>> {
     private Element<T> head;
     int size;
+
     public SortedCircularDoublyLinkedList() {
         this.head = null;
-        this.size=0;
+        this.size = 0;
     }
 
     public int getSize() {

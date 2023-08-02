@@ -3,10 +3,8 @@ package it.unitn.disi.marchioro.mousavi;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import scala.collection.immutable.Stream;
 import scala.concurrent.duration.Duration;
 
-import javax.xml.crypto.Data;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
@@ -85,7 +83,8 @@ public class Node extends AbstractActor {
         public final ActorRef nodeRef;
         public final UpdateType updateType;
 
-        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef, UpdateType updateType) {
+        public GroupUpdate(SortedCircularDoublyLinkedList<ActorRef> group, int nodeKey, ActorRef nodeRef,
+                UpdateType updateType) {
             this.group = group.clone();
             this.nodeKey = nodeKey;
             this.nodeRef = nodeRef;
@@ -98,7 +97,9 @@ public class Node extends AbstractActor {
             }
         }
     }
-    public static class Recovery implements Serializable {}
+
+    public static class Recovery implements Serializable {
+    }
 
     static public class ClientRequest implements Serializable {
         public final Request request;
@@ -112,9 +113,9 @@ public class Node extends AbstractActor {
         public final int key;
         public final int requesterID;
 
-        public ReadRequest(int key,int requesterID) {
+        public ReadRequest(int key, int requesterID) {
             this.key = key;
-            this.requesterID=requesterID;
+            this.requesterID = requesterID;
         }
     }
 
@@ -127,13 +128,14 @@ public class Node extends AbstractActor {
             this.requestState = requestState;
         }
     }
+
     static public class LockRequest implements Serializable {
         public final int key;
         public final int requesterID;
 
-        public LockRequest(int key,int requesterID) {
+        public LockRequest(int key, int requesterID) {
             this.key = key;
-            this.requesterID=requesterID;
+            this.requesterID = requesterID;
         }
     }
 
@@ -153,16 +155,16 @@ public class Node extends AbstractActor {
         public int version;
         public final Type type;
 
-        public CommitRequest(int key, String value,int version, Type type) {
+        public CommitRequest(int key, String value, int version, Type type) {
             this.key = key;
             this.value = value;
-            this.version=version;
-            this.type=type;
+            this.version = version;
+            this.type = type;
         }
 
     }
 
-    static public class CommitResponse implements Serializable{
+    static public class CommitResponse implements Serializable {
         public final DataItem dataItem;
         public final boolean requestState; // true means success
 
@@ -176,7 +178,7 @@ public class Node extends AbstractActor {
         public final int key;
         public final int id;
 
-        public StorageStateRequest(int key,int id) {
+        public StorageStateRequest(int key, int id) {
             this.key = key;
             this.id = id;
         }
@@ -184,13 +186,14 @@ public class Node extends AbstractActor {
 
     static public class StorageStateResponse implements Serializable {
         public final int key;
-        public final HashMap<Integer,DataItem> updates;
+        public final HashMap<Integer, DataItem> updates;
 
-        public StorageStateResponse(int key,HashMap<Integer,DataItem> updates) {
+        public StorageStateResponse(int key, HashMap<Integer, DataItem> updates) {
             this.key = key;
-            this.updates = (HashMap<Integer,DataItem>) updates.clone();
+            this.updates = (HashMap<Integer, DataItem>) updates.clone();
         }
     }
+
     static public class AbortOperation implements Serializable {
         public final int key;
 
@@ -198,13 +201,14 @@ public class Node extends AbstractActor {
             this.key = key;
         }
     }
+
     static public class UnlockRequest implements Serializable {
         public final int key;
         public final int requesterID;
 
-        public UnlockRequest(int key,int requesterID) {
+        public UnlockRequest(int key, int requesterID) {
             this.key = key;
-            this.requesterID=requesterID;
+            this.requesterID = requesterID;
         }
     }
 
@@ -228,8 +232,11 @@ public class Node extends AbstractActor {
         }
     }
 
-    static public class PrintStorage implements Serializable {}
-    static public class Crash implements Serializable {}
+    static public class PrintStorage implements Serializable {
+    }
+
+    static public class Crash implements Serializable {
+    }
 
     @Override
     public Receive createReceive() {
@@ -248,9 +255,9 @@ public class Node extends AbstractActor {
                 .match(RemoveAfterGroupChange.class, this::onRemoveAfterGroupChange)
                 .match(PrintStorage.class, this::onPrintStorage)
                 .match(AbortOperation.class, this::onAbortOperation)
-                .match(Crash.class,this::onCrash)
-                .match(StorageStateRequest.class,this::onStorageStateRequest)
-                .match(StorageStateResponse.class,this::onStorageStateResponse)
+                .match(Crash.class, this::onCrash)
+                .match(StorageStateRequest.class, this::onStorageStateRequest)
+                .match(StorageStateResponse.class, this::onStorageStateResponse)
                 .build();
     }
 
@@ -258,11 +265,10 @@ public class Node extends AbstractActor {
         getContext().become(crashed());
     }
 
-
     // if crashed ignore all messages
     public Receive crashed() {
         return receiveBuilder()
-                .match(Recovery.class,this::onRecovery)
+                .match(Recovery.class, this::onRecovery)
                 .match(ClientRequest.class, this::onRequestToCrashed)
                 .match(PrintStorage.class, this::onPrintStorage)
                 .matchAny(msg -> {
@@ -270,16 +276,15 @@ public class Node extends AbstractActor {
                 .build();
     }
 
-    //if the coordinator contacted by the client is crashed, send back error after some time, simulating a timeout in the connection
+    // if the coordinator contacted by the client is crashed, send back error after
+    // some time, simulating a timeout in the connection
     private void onRequestToCrashed(ClientRequest request) {
         getContext().system().scheduler().scheduleOnce(
                 Duration.create(2000, TimeUnit.MILLISECONDS),
                 getSender(),
-                new DataItem(request.request.getData().getKey(),"",-1), // message sent to myself
-                getContext().system().dispatcher(), getSelf()
-        );
+                new DataItem(request.request.getData().getKey(), "", -1), // message sent to myself
+                getContext().system().dispatcher(), getSelf());
     }
-
 
     private void onGroupUpdate(GroupUpdate groupUpdate) {
         for (Map.Entry<Integer, DataItem> entry : storage.entrySet()) {
@@ -311,7 +316,7 @@ public class Node extends AbstractActor {
 
         this.group = groupUpdate.group;
 
-        if(Constants.DEBUGGING){
+        if (Constants.DEBUGGING) {
             System.out.println("Group Update - My key: " + this.key);
             System.out.println(this.group);
             System.out.println();
@@ -350,7 +355,7 @@ public class Node extends AbstractActor {
             otherNode.value.tell(groupUpdate, getSelf());
         }
 
-        if(Constants.DEBUGGING) {
+        if (Constants.DEBUGGING) {
             System.out.println("Coordinator - Group Update, My key: " + this.key);
             System.out.println(this.group);
             System.out.println();
@@ -359,59 +364,63 @@ public class Node extends AbstractActor {
 
     private void onClientRequest(ClientRequest clientRequest) {
 
-        if (clientRequest.request.getType()==Type.UPDATE && requests.containsKey(clientRequest.request.getData().getKey())) {
-            getSender().tell(new DataItem(clientRequest.request.getData().getKey(),"",-1),getSelf());
-            //throw new IllegalArgumentException("Coordinator is already handling an operation on the same dataitem");
+        if (clientRequest.request.getType() == Type.UPDATE
+                && requests.containsKey(clientRequest.request.getData().getKey())) {
+            getSender().tell(new DataItem(clientRequest.request.getData().getKey(), "", -1), getSelf());
+            // throw new IllegalArgumentException("Coordinator is already handling an
+            // operation on the same dataitem");
         }
         requests.put(clientRequest.request.getData().getKey(), clientRequest.request);
         if (clientRequest.request.getType() == Type.READ) {
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getData().getKey(),
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(
+                    clientRequest.request.getData().getKey(),
                     Constants.N);
 
-            if(Constants.DEBUGGING) {
+            if (Constants.DEBUGGING) {
                 System.out.println("client request to server " + getId() + " for data item "
                         + clientRequest.request.getData().getKey() + ", asking ");
             }
             requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
 
-                if(Constants.DEBUGGING) {
+                if (Constants.DEBUGGING) {
                     System.out.print(el.key + " ");
                 }
-                el.value.tell(new ReadRequest(clientRequest.request.getData().getKey(),getId()),getSelf());
+                el.value.tell(new ReadRequest(clientRequest.request.getData().getKey(), getId()), getSelf());
                 // don't request locks when reading, handle 3 cases:
                 // highest version with lock: abort (an update is being performed)
                 // else if highest version without lock: deliver highest version
-                //el.value.tell(new LockRequest(clientRequest.request.getKey(), clientRequest.request.getType(),getId()),getSelf());
+                // el.value.tell(new LockRequest(clientRequest.request.getKey(),
+                // clientRequest.request.getType(),getId()),getSelf());
             }
 
-            if(Constants.DEBUGGING) {
+            if (Constants.DEBUGGING) {
                 System.out.println("");
             }
         } else if (clientRequest.request.getType() == Type.UPDATE) {
-            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(clientRequest.request.getData().getKey(),
+            HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(
+                    clientRequest.request.getData().getKey(),
                     Constants.N);
 
-            if(Constants.DEBUGGING) {
+            if (Constants.DEBUGGING) {
                 System.out.println("client request to server " + getId() + " for data item "
                         + clientRequest.request.getData().getKey() + ", asking ");
             }
             requests.get(clientRequest.request.getData().getKey()).setState(State.PENDING);
             for (Element<ActorRef> el : handlers.values()) {
 
-                if(Constants.DEBUGGING) {
+                if (Constants.DEBUGGING) {
                     System.out.print(el.key + " ");
                 }
-                el.value.tell(new LockRequest(clientRequest.request.getData().getKey(),getId()),getSelf());
+                el.value.tell(new LockRequest(clientRequest.request.getData().getKey(), getId()), getSelf());
                 getContext().system().scheduler().scheduleOnce(
                         Duration.create(4000, TimeUnit.MILLISECONDS),
                         getSelf(),
                         new AbortOperation(clientRequest.request.getData().getKey()),
-                        getContext().system().dispatcher(), getSelf()
-                );
+                        getContext().system().dispatcher(), getSelf());
             }
 
-            if(Constants.DEBUGGING) {
+            if (Constants.DEBUGGING) {
                 System.out.println("");
             }
         } else {
@@ -420,56 +429,57 @@ public class Node extends AbstractActor {
     }
 
     private void onAbortOperation(AbortOperation abortOperation) {
-        //check if the operation is still in the queue, otherwise it has been already dealt with
-        if(requests.containsKey(abortOperation.key)){
-            //immediately communicate error to client
-            requests.get(abortOperation.key).getClient().tell(new DataItem(abortOperation.key, "", -1, -1),getSelf());
-            //remove request from the list
+        // check if the operation is still in the queue, otherwise it has been already
+        // dealt with
+        if (requests.containsKey(abortOperation.key)) {
+            // immediately communicate error to client
+            requests.get(abortOperation.key).getClient().tell(new DataItem(abortOperation.key, "", -1, -1), getSelf());
+            // remove request from the list
             requests.remove(abortOperation.key);
-            //release acquired locks
+            // release acquired locks
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(abortOperation.key,
                     Constants.N);
             for (Element<ActorRef> el : handlers.values()) {
-                if(Constants.DEBUGGING){
+                if (Constants.DEBUGGING) {
                     System.out.print(el.key + " ");
                 }
-                el.value.tell(new UnlockRequest(abortOperation.key,getId()),getSelf());
+                el.value.tell(new UnlockRequest(abortOperation.key, getId()), getSelf());
             }
         }
 
     }
 
-    private void onStorageStateRequest(StorageStateRequest storageStateRequest){
-        HashMap<Integer,DataItem> updates= new HashMap<>();
-        for (DataItem d: storage.values()) {
-            if(d.getVersion()!=-1 && group.getHandlers(d.getKey(),Constants.N).containsKey(storageStateRequest.key)){
-                updates.put(d.getKey(),d);
+    private void onStorageStateRequest(StorageStateRequest storageStateRequest) {
+        HashMap<Integer, DataItem> updates = new HashMap<>();
+        for (DataItem d : storage.values()) {
+            if (d.getVersion() != -1
+                    && group.getHandlers(d.getKey(), Constants.N).containsKey(storageStateRequest.key)) {
+                updates.put(d.getKey(), d);
             }
         }
-        getSender().tell(new StorageStateResponse(getId(),updates),getSelf());
+        getSender().tell(new StorageStateResponse(getId(), updates), getSelf());
     }
 
-    private void onStorageStateResponse(StorageStateResponse storageStateResponse){
-        Collection<DataItem> items= storageStateResponse.updates.values();
-        for (DataItem d: items){
-            if(!storage.containsKey(d.getKey()) ||
-             d.getVersion()>storage.get(d.getKey()).getVersion()){
-                storage.put(d.getKey(),new DataItem(d.getKey(),d.getValue(),d.getVersion()));
+    private void onStorageStateResponse(StorageStateResponse storageStateResponse) {
+        Collection<DataItem> items = storageStateResponse.updates.values();
+        for (DataItem d : items) {
+            if (!storage.containsKey(d.getKey()) ||
+                    d.getVersion() > storage.get(d.getKey()).getVersion()) {
+                storage.put(d.getKey(), new DataItem(d.getKey(), d.getValue(), d.getVersion()));
             }
         }
     }
-
 
     private void onRecovery(Recovery recovery) {
-        Element<ActorRef> groupElement= group.getElement(getKey());
+        Element<ActorRef> groupElement = group.getElement(getKey());
         // start asking for updates
-        for (int i=0;i<Constants.R;i++){
-            Element<ActorRef> server= groupElement.next;
-            server.value.tell(new StorageStateRequest(getKey(),getId()),getSelf());
+        for (int i = 0; i < Constants.R; i++) {
+            Element<ActorRef> server = groupElement.next;
+            server.value.tell(new StorageStateRequest(getKey(), getId()), getSelf());
         }
-        for (int i=0;i<Constants.R;i++){
-            Element<ActorRef> server= groupElement.prev;
-            server.value.tell(new StorageStateRequest(getKey(),getId()),getSelf());
+        for (int i = 0; i < Constants.R; i++) {
+            Element<ActorRef> server = groupElement.prev;
+            server.value.tell(new StorageStateRequest(getKey(), getId()), getSelf());
         }
 
         getContext().become(createReceive());
@@ -483,7 +493,7 @@ public class Node extends AbstractActor {
             } else {
                 getSender().tell(new LockResponse(storage.get(lockRequest.key), false), getSelf());
             }
-        }  else {
+        } else {
             // this is executed when we are trying to add a new data item to the storage of
             // the server
 
@@ -492,7 +502,7 @@ public class Node extends AbstractActor {
             // function to remove the item that was added for the first time if it can not
             // be added to all of the nodes.
 
-            DataItem suppDataItem= new DataItem(lockRequest.key, "", -1, lockRequest.requesterID);
+            DataItem suppDataItem = new DataItem(lockRequest.key, "", -1, lockRequest.requesterID);
             storage.put(lockRequest.key, suppDataItem);
             getSender().tell(new LockResponse(suppDataItem, true), getSelf());
         }
@@ -506,28 +516,31 @@ public class Node extends AbstractActor {
         }
         r.receivedResponse();
 
-        if(Constants.DEBUGGING) {
+        if (Constants.DEBUGGING) {
             System.out.println("received response ");
         }
         if (lockResponse.requestState) {
             r.acquiredLock();
         }
-        if(r.getState() == State.PENDING){
-            //get highest version
-            if(requests.get(lockResponse.dataItem.getKey()).getData().getVersion()<lockResponse.dataItem.getVersion()){
+        if (r.getState() == State.PENDING) {
+            // get highest version
+            if (requests.get(lockResponse.dataItem.getKey()).getData().getVersion() < lockResponse.dataItem
+                    .getVersion()) {
                 requests.get(lockResponse.dataItem.getKey()).getData().setVersion(lockResponse.dataItem.getVersion());
             }
-            if (r.canCommit() ) {
+            if (r.canCommit()) {
                 r.setState(State.COMMITTING);
 
-                if(Constants.DEBUGGING) {
+                if (Constants.DEBUGGING) {
                     System.out.println("received enough locks to commit " + r.getData().getKey());
                 }
                 // Get handlers
-                HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
+                HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(),
+                        Constants.N);
                 // Send data commit request to handlers
-                CommitRequest commitRequest= new CommitRequest(r.getData().getKey(),r.getData().getValue(),requests.get(lockResponse.dataItem.getKey()).getData().getVersion(),r.getType());
-                if(r.getType()==Type.UPDATE){
+                CommitRequest commitRequest = new CommitRequest(r.getData().getKey(), r.getData().getValue(),
+                        requests.get(lockResponse.dataItem.getKey()).getData().getVersion(), r.getType());
+                if (r.getType() == Type.UPDATE) {
                     commitRequest.version++;
                     requests.get(r.getData().getKey()).getData().setVersion(commitRequest.version);
                 }
@@ -535,8 +548,9 @@ public class Node extends AbstractActor {
                     el.value.tell(commitRequest, getSelf());
                 }
 
-                if(requests.containsKey(lockResponse.dataItem.getKey())){
-                    requests.get(lockResponse.dataItem.getKey()).getClient().tell(requests.get(lockResponse.dataItem.getKey()).getData(),getSelf());
+                if (requests.containsKey(lockResponse.dataItem.getKey())) {
+                    requests.get(lockResponse.dataItem.getKey()).getClient()
+                            .tell(requests.get(lockResponse.dataItem.getKey()).getData(), getSelf());
                     requests.remove(lockResponse.dataItem.getKey());
                 }
             }
@@ -547,20 +561,22 @@ public class Node extends AbstractActor {
             HashMap<Integer, Element<ActorRef>> handlers = this.group.getHandlers(r.getData().getKey(), Constants.N);
             // Send Unlock request to handlers
             for (Element<ActorRef> el : handlers.values()) {
-                el.value.tell(new UnlockRequest(r.getData().getKey(),getId()), getSelf());
+                el.value.tell(new UnlockRequest(r.getData().getKey(), getId()), getSelf());
             }
-            r.getClient().tell(new DataItem(r.getData().getKey(), "", -1, -1),getSelf());
+            r.getClient().tell(new DataItem(r.getData().getKey(), "", -1, -1), getSelf());
             // remove r from te requests
             requests.remove(r.getData().getKey());
 
         }
     }
+
     private void onReadRequest(ReadRequest readRequest) {
         if (storage.containsKey(readRequest.key)) {
             getSender().tell(new ReadResponse(storage.get(readRequest.key), true), getSelf());
-        }  else {
-            // this is executed when we are trying to read a data item not present in the storage
-            DataItem suppDataItem= new DataItem(readRequest.key, "", -1, -1);
+        } else {
+            // this is executed when we are trying to read a data item not present in the
+            // storage
+            DataItem suppDataItem = new DataItem(readRequest.key, "", -1, -1);
             getSender().tell(new ReadResponse(suppDataItem, false), getSelf());
         }
     }
@@ -573,74 +589,84 @@ public class Node extends AbstractActor {
         }
         r.receivedResponse();
 
-        if(Constants.DEBUGGING) {
+        if (Constants.DEBUGGING) {
             System.out.println("received response ");
         }
         if (readResponse.requestState) {
             r.acquiredLock();
-            if(r.getData().getVersion()<readResponse.dataItem.getVersion() || (r.getData().getVersion()==readResponse.dataItem.getVersion() && readResponse.dataItem.isLock())){
+            if (r.getData().getVersion() < readResponse.dataItem.getVersion()
+                    || (r.getData().getVersion() == readResponse.dataItem.getVersion()
+                            && readResponse.dataItem.isLock())) {
                 r.setData(readResponse.dataItem);
             }
         }
         if (r.canCommit() && r.getState() == State.PENDING) {
             r.setState(State.COMMITTING);
-            if(r.getData().isLock()){
-                //abort
-                r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
-            }else{
-                //success
-                r.getClient().tell(r.getData(),getSelf());
+            if (r.getData().isLock()) {
+                // abort
+                r.getClient().tell(new DataItem(r.getData().getKey(), "", -1), getSelf());
+            } else {
+                // success
+                r.getClient().tell(r.getData(), getSelf());
             }
             requests.remove(r.getData().getKey());
         }
         if (!r.mayBePerformed() && r.getState() == State.PENDING) {
-            //abort
+            // abort
             r.setState(State.ENDING);
-            r.getClient().tell(new DataItem(r.getData().getKey(),"",-1),getSelf());
+            r.getClient().tell(new DataItem(r.getData().getKey(), "", -1), getSelf());
         }
     }
+
     public void onUnlockRequest(UnlockRequest unlockRequest) {
         // check if the lock is for the node that is asking to unlock,
         // otherwise we can unlock a data item that we don't own.
 
-        //we only create UnlockRequests when we abort an update operation
-        if (storage.containsKey(unlockRequest.key) && storage.get(unlockRequest.key).getLocker()==unlockRequest.requesterID) {
-            //if version is -1 we simply delete the object from the storage since there has never been a successful update to the object
-            if(storage.get(unlockRequest.key).getVersion()==-1){
+        // we only create UnlockRequests when we abort an update operation
+        if (storage.containsKey(unlockRequest.key)
+                && storage.get(unlockRequest.key).getLocker() == unlockRequest.requesterID) {
+            // if version is -1 we simply delete the object from the storage since there has
+            // never been a successful update to the object
+            if (storage.get(unlockRequest.key).getVersion() == -1) {
                 storage.remove(unlockRequest.key);
-            }else{
+            } else {
                 storage.get(unlockRequest.key).setLock(-1);
             }
         }
     }
 
     private void onCommitRequest(CommitRequest msg) {
-        //this shouldn't be necessary. Only update requests can reach this branch
-        if(msg.type==Type.UPDATE){
-            //the storage contains key should always be true, a commit can be requested only after
-            //a lockRequest that would have added the dataitem if not present
-            if (storage.containsKey(msg.key) && msg.version>=storage.get(msg.key).getVersion()) {
+        // this shouldn't be necessary. Only update requests can reach this branch
+        if (msg.type == Type.UPDATE) {
+            // the storage contains key should always be true, a commit can be requested
+            // only after
+            // a lockRequest that would have added the dataitem if not present
+            if (storage.containsKey(msg.key) && msg.version >= storage.get(msg.key).getVersion()) {
                 DataItem storedItem = storage.get(msg.key);
                 storedItem.setVersion(msg.version);
                 storedItem.setValue(msg.value);
-                //getSender().tell(new CommitResponse(storedItem,true),getSelf());
+                // getSender().tell(new CommitResponse(storedItem,true),getSelf());
                 // Unlock data item
                 storedItem.setLock(-1);
             }
 
         }
-        if(Constants.DEBUGGING) {
+        if (Constants.DEBUGGING) {
             for (DataItem d : storage.values()) {
                 System.out.println(this.id + ": " + d.toString());
             }
         }
     }
+
     private void onCommitResponse(CommitResponse commitResponse) {
-        if(Constants.DEBUGGING)
-            System.out.println("Request for data item "+commitResponse.dataItem.getKey()+ " completed "+ commitResponse.dataItem.toString());
-        //if the key is not present the response's already being delivered to the client
-        if(requests.containsKey(commitResponse.dataItem.getKey())){
-            requests.get(commitResponse.dataItem.getKey()).getClient().tell(requests.get(commitResponse.dataItem.getKey()).getData(),getSelf());
+        if (Constants.DEBUGGING)
+            System.out.println("Request for data item " + commitResponse.dataItem.getKey() + " completed "
+                    + commitResponse.dataItem.toString());
+        // if the key is not present the response's already being delivered to the
+        // client
+        if (requests.containsKey(commitResponse.dataItem.getKey())) {
+            requests.get(commitResponse.dataItem.getKey()).getClient()
+                    .tell(requests.get(commitResponse.dataItem.getKey()).getData(), getSelf());
             requests.remove(commitResponse.dataItem.getKey());
         }
     }

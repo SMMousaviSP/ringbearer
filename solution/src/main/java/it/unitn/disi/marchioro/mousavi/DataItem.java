@@ -32,11 +32,13 @@ public class DataItem implements Cloneable {
     }
 
     public boolean isLock() {
-        return lock>=0;
+        return lock >= 0;
     }
-    public int getLocker(){
+
+    public int getLocker() {
         return lock;
     }
+
     public void setLock(int lock) {
         this.lock = lock;
     }
